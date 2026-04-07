@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner'
 import { MessageSquare, Star, ThumbsUp, Send } from 'lucide-react'
 import { Separator } from '@/components/ui/separator'
+import { safeSetItem } from '@/lib/storage'
 
 interface Feedback {
   id: string
@@ -65,7 +66,7 @@ export default function FeedbackSystem(): React.JSX.Element {
 
     // Save to localStorage
     const updatedFeedback = [...feedbackList, newFeedback]
-    localStorage.setItem('feedback', JSON.stringify(updatedFeedback))
+    safeSetItem('feedback', JSON.stringify(updatedFeedback))
     setFeedbackList(updatedFeedback)
 
     toast.success('Thank you for your feedback!', {

@@ -1,19 +1,17 @@
 import mongoose, { Schema, type Document } from 'mongoose';
 
-export interface IUser extends Document {
+export interface IOfficial extends Document {
   _id: mongoose.Types.ObjectId;
   username: string;
   password: string;
   email?: string;
-  phone: string;
   fullName: string;
-  address: string;
-  isAdmin: boolean;
+  role: 'admin' | 'staff' | 'officer' | 'supervisor' | 'clerk' | string;
   createdAt: Date;
   updatedAt: Date;
 }
 
-const UserSchema: Schema = new Schema(
+const OfficialSchema: Schema = new Schema(
   {
     username: {
       type: String,
@@ -33,21 +31,15 @@ const UserSchema: Schema = new Schema(
       trim: true,
       lowercase: true,
     },
-    phone: {
-      type: String,
-      required: true,
-    },
     fullName: {
       type: String,
       required: true,
     },
-    address: {
+    role: {
       type: String,
       required: true,
-    },
-    isAdmin: {
-      type: Boolean,
-      default: false,
+      trim: true,
+      lowercase: true,
     },
   },
   {
@@ -55,4 +47,5 @@ const UserSchema: Schema = new Schema(
   }
 );
 
-export default mongoose.models.User || mongoose.model<IUser>('User', UserSchema);
+export default mongoose.models.Official || mongoose.model<IOfficial>('Official', OfficialSchema);
+

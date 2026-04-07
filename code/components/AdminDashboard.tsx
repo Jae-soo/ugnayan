@@ -42,8 +42,9 @@ import {
   Link as LinkIcon
 } from 'lucide-react'
 import type { ServiceRequest, Report } from '@/lib/types'
-import { getServiceRequests, updateServiceRequestStatus, getReports, updateReportStatus } from '@/lib/storage'
+import { getServiceRequests, updateServiceRequestStatus, getReports, updateReportStatus, safeSetItem } from '@/lib/storage'
 import { toast } from 'sonner'
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer } from 'recharts'
 
 interface AdminDashboardProps {
   officialInfo: {
@@ -236,7 +237,7 @@ export default function AdminDashboard({ officialInfo }: AdminDashboardProps): R
     const existing = localStorage.getItem('barangay_announcements')
     const arr: Announcement[] = existing ? JSON.parse(existing) as Announcement[] : []
     const updated = [announcement, ...arr]
-    localStorage.setItem('barangay_announcements', JSON.stringify(updated))
+    safeSetItem('barangay_announcements', JSON.stringify(updated))
     setAnnouncements(updated)
     try { window.dispatchEvent(new Event('barangay_announcements_updated')) } catch {}
     toast.success('Announcement created locally!')
@@ -257,7 +258,7 @@ export default function AdminDashboard({ officialInfo }: AdminDashboardProps): R
     const existing = localStorage.getItem('barangay_announcements')
     const arr: Announcement[] = existing ? JSON.parse(existing) as Announcement[] : []
     const updated = arr.filter(a => a.id !== announcementId)
-    localStorage.setItem('barangay_announcements', JSON.stringify(updated))
+    safeSetItem('barangay_announcements', JSON.stringify(updated))
     setAnnouncements(updated)
     try { window.dispatchEvent(new Event('barangay_announcements_updated')) } catch {}
     toast.success('Announcement deleted!')
@@ -491,7 +492,7 @@ export default function AdminDashboard({ officialInfo }: AdminDashboardProps): R
 
       {/* Management Tabs */}
       <Tabs defaultValue="requests" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="requests">
             <FileText className="h-4 w-4 mr-2" />
             Service Requests
@@ -507,6 +508,10 @@ export default function AdminDashboard({ officialInfo }: AdminDashboardProps): R
           <TabsTrigger value="announcements">
             <Bell className="h-4 w-4 mr-2" />
             Announcements
+          </TabsTrigger>
+          <TabsTrigger value="analytics">
+            <TrendingUp className="h-4 w-4 mr-2" />
+            Analytics
           </TabsTrigger>
         </TabsList>
 
@@ -539,7 +544,7 @@ export default function AdminDashboard({ officialInfo }: AdminDashboardProps): R
                       <TableHead>Name</TableHead>
                       <TableHead>Document Type</TableHead>
                       <TableHead>Contact</TableHead>
-                      <TableHead>Date</TableHead>
+                      <TableHead>Date & Time</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Actions</TableHead>
                     </TableRow>
@@ -563,7 +568,7 @@ export default function AdminDashboard({ officialInfo }: AdminDashboardProps): R
                               <div className="text-gray-500">{request.phone}</div>
                             </div>
                           </TableCell>
-                          <TableCell>{new Date(request.submittedAt).toLocaleDateString()}</TableCell>
+                          <TableCell>{new Date(request.submittedAt).toLocaleString()}</TableCell>
                           <TableCell>{getStatusBadge(request.status)}</TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">
@@ -601,6 +606,158 @@ export default function AdminDashboard({ officialInfo }: AdminDashboardProps): R
           </Card>
         </TabsContent>
 
+        {/* Analytics Tab */}
+        <TabsContent value="analytics">
+          <div className="grid gap-4 md:grid-cols-3">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Requests</CardTitle>
+                <FileText className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{serviceRequests.length}</div>
+                <p className="text-xs text-muted-foreground">
+                  {serviceRequests.filter(r => r.status === 'completed' || r.status === 'ready' || r.status === 'ready_for_pickup').length} completed
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Reports</CardTitle>
+                <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{reports.length}</div>
+                <p className="text-xs text-muted-foreground">
+                  {reports.filter(r => r.status === 'resolved').length} resolved
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Residents</CardTitle>
+                <Users className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{users.length}</div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2 mt-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Service Request Status</CardTitle>
+              </CardHeader>
+              <CardContent className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={
+                        [
+                          { name: 'pending', value: serviceRequests.filter(r => r.status === 'pending').length },
+                          { name: 'in-progress', value: serviceRequests.filter(r => r.status === 'in-progress' || r.status === 'processing').length },
+                          { name: 'ready', value: serviceRequests.filter(r => r.status === 'ready' || r.status === 'ready_for_pickup').length },
+                          { name: 'completed', value: serviceRequests.filter(r => r.status === 'completed').length },
+                          { name: 'rejected', value: serviceRequests.filter(r => r.status === 'rejected').length },
+                        ]
+                      }
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={80}
+                      paddingAngle={5}
+                      dataKey="value"
+                    >
+                      {['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'].map((c, i) => (
+                        <Cell key={`cell-${i}`} fill={c} />
+                      ))}
+                    </Pie>
+                    <RechartsTooltip />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Service Request Types</CardTitle>
+              </CardHeader>
+              <CardContent className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={
+                    Object.entries(
+                      serviceRequests.reduce<Record<string, number>>((acc, r) => {
+                        const key = (r.documentType || 'unknown').toLowerCase();
+                        acc[key] = (acc[key] || 0) + 1;
+                        return acc;
+                      }, {})
+                    ).map(([name, value]) => ({ name, value }))
+                  } maxBarSize={50}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis allowDecimals={false} />
+                    <RechartsTooltip />
+                    <Bar dataKey="value" fill="#8884d8" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2 mt-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Report Status</CardTitle>
+              </CardHeader>
+              <CardContent className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={
+                    [
+                      { name: 'pending', value: reports.filter(r => r.status === 'pending').length },
+                      { name: 'in-progress', value: reports.filter(r => r.status === 'in-progress').length },
+                      { name: 'resolved', value: reports.filter(r => r.status === 'resolved').length },
+                      { name: 'rejected', value: reports.filter(r => r.status === 'rejected').length },
+                    ]
+                  } maxBarSize={50}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis allowDecimals={false} />
+                    <RechartsTooltip />
+                    <Bar dataKey="value" fill="#00C49F" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Reports by Category</CardTitle>
+              </CardHeader>
+              <CardContent className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={
+                    Object.entries(
+                      reports.reduce<Record<string, number>>((acc, r) => {
+                        const key = (r.reportType || 'unknown').toLowerCase();
+                        acc[key] = (acc[key] || 0) + 1;
+                        return acc;
+                      }, {})
+                    ).map(([name, value]) => ({ name, value }))
+                  } maxBarSize={50}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis allowDecimals={false} />
+                    <RechartsTooltip />
+                    <Bar dataKey="value" fill="#FFBB28" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
         {/* Reports Tab */}
         <TabsContent value="reports">
           <Card>
@@ -631,7 +788,7 @@ export default function AdminDashboard({ officialInfo }: AdminDashboardProps): R
                       <TableHead>Priority</TableHead>
                       <TableHead>Reporter</TableHead>
                       <TableHead>Location</TableHead>
-                      <TableHead>Date</TableHead>
+                      <TableHead>Date & Time</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Actions</TableHead>
                     </TableRow>
@@ -656,7 +813,7 @@ export default function AdminDashboard({ officialInfo }: AdminDashboardProps): R
                             </div>
                           </TableCell>
                           <TableCell className="max-w-[200px] truncate">{report.location}</TableCell>
-                          <TableCell>{new Date(report.submittedAt).toLocaleDateString()}</TableCell>
+                          <TableCell>{new Date(report.submittedAt).toLocaleString()}</TableCell>
                           <TableCell>{getStatusBadge(report.status)}</TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">
@@ -744,7 +901,7 @@ export default function AdminDashboard({ officialInfo }: AdminDashboardProps): R
                           <TableCell>{user.email}</TableCell>
                           <TableCell>{user.phone}</TableCell>
                           <TableCell className="max-w-[200px] truncate">{user.address}</TableCell>
-                          <TableCell>{new Date(user.registeredAt).toLocaleDateString()}</TableCell>
+                          <TableCell>{new Date(user.registeredAt).toLocaleString()}</TableCell>
                           <TableCell>
                             <Badge className={user.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}>
                               {user.status}
@@ -787,11 +944,11 @@ export default function AdminDashboard({ officialInfo }: AdminDashboardProps): R
                                 {getCategoryBadge(announcement.category)}
                                 {getPriorityBadge(announcement.priority)}
                                 <span className="text-xs text-gray-500">
-                                  Posted: {new Date(announcement.postedAt).toLocaleDateString()}
+                                  Posted: {new Date(announcement.postedAt).toLocaleString()}
                                 </span>
                                 {announcement.eventDate && (
                                   <span className="text-xs text-blue-600 font-semibold">
-                                    Event: {new Date(announcement.eventDate).toLocaleDateString()}
+                                    Event: {new Date(announcement.eventDate).toLocaleString()}
                                   </span>
                                 )}
                               </div>

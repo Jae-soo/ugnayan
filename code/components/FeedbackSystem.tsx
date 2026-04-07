@@ -8,8 +8,9 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
-import { MessageSquare, Star, ThumbsUp, Send } from 'lucide-react'
+import { MessageSquare, Star, ThumbsUp, Send, ArrowLeft } from 'lucide-react'
 import { Separator } from '@/components/ui/separator'
+import { safeSetItem } from '@/lib/storage'
 
 interface Feedback {
   id: string
@@ -21,7 +22,7 @@ interface Feedback {
   submittedAt: string
 }
 
-export default function FeedbackSystem(): React.JSX.Element {
+export default function FeedbackSystem({ onBack }: { onBack?: () => void }): React.JSX.Element {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -62,24 +63,18 @@ export default function FeedbackSystem(): React.JSX.Element {
       submittedAt: new Date().toISOString()
     }
 
-    // Save to localStorage
-    const updatedFeedback = [...feedbackList, newFeedback]
-    localStorage.setItem('feedback', JSON.stringify(updatedFeedback))
-    setFeedbackList(updatedFeedback)
+    try {
+      const updatedFeedback = [newFeedback, ...feedbackList]
+      setFeedbackList(updatedFeedback)
+      safeSetItem('feedback', JSON.stringify(updatedFeedback))
 
-    toast.success('Thank you for your feedback!', {
-      description: 'Your input helps us improve our services.'
-    })
-
-    // Reset form
-    setFormData({
-      name: '',
-      email: '',
-      category: '',
-      rating: 0,
-      message: ''
-    })
-    setIsSubmitting(false)
+      toast.success('Thank you for your feedback!')
+      setFormData({ name: '', email: '', category: '', rating: 0, message: '' })
+    } catch {
+      toast.error('Failed to submit feedback')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const renderStarRating = (currentRating: number): React.JSX.Element => {
@@ -122,6 +117,16 @@ export default function FeedbackSystem(): React.JSX.Element {
 
   return (
     <div className="space-y-6">
+      {onBack && (
+        <Button 
+          variant="ghost" 
+          onClick={onBack}
+          className="flex items-center gap-2 text-gray-600 hover:text-pink-600"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to Dashboard
+        </Button>
+      )}
       {/* Feedback Form */}
       <Card className="shadow-lg">
         <CardHeader className="bg-gradient-to-r from-pink-600 to-purple-600 text-white">

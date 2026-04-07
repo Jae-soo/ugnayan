@@ -48,11 +48,16 @@ import {
   Send,
   History,
   Trash2,
-  Paperclip
+  Paperclip,
+  PieChart as PieChartIcon,
+  BarChart as BarChartIcon
 } from 'lucide-react'
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer } from 'recharts'
 import type { ServiceRequest, Report, Reply } from '@/lib/types'
-import { getServiceRequests as getLocalServiceRequests, getReports as getLocalReports, updateServiceRequestStatus as updateLocalServiceRequestStatus, updateReportStatus as updateLocalReportStatus } from '@/lib/storage'
+import { getServiceRequests as getLocalServiceRequests, getReports as getLocalReports, updateServiceRequestStatus as updateLocalServiceRequestStatus, updateReportStatus as updateLocalReportStatus, safeSetItem } from '@/lib/storage'
 import { toast } from 'sonner'
+import RealTimeClock from './RealTimeClock'
+import CommunityMapWrapper from './CommunityMapWrapper'
 
 interface OfficialDashboardProps {
   officialInfo: {
@@ -131,6 +136,7 @@ export default function OfficialDashboard({ officialInfo, onLogout }: OfficialDa
   const [showRepliesDialog, setShowRepliesDialog] = useState<boolean>(false)
   const [isSendingReply, setIsSendingReply] = useState<boolean>(false)
   const [replyFiles, setReplyFiles] = useState<Array<{ name: string; size: number; type: string; dataUrl: string }>>([])
+  const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' })
   const [newAnnouncement, setNewAnnouncement] = useState({
     title: '',
     content: '',
@@ -147,10 +153,37 @@ export default function OfficialDashboard({ officialInfo, onLogout }: OfficialDa
     activeUsers: 0
   })
 
+  const [analyticsData, setAnalyticsData] = useState<{
+    requests: {
+      total: number
+      pending: number
+      completed: number
+      byStatus: { name: string; value: number }[]
+      byType: { name: string; value: number }[]
+      byDocumentType: { name: string; value: number }[]
+    }
+    reports: {
+      total: number
+      resolved: number
+      byStatus: { name: string; value: number }[]
+      byCategory: { name: string; value: number }[]
+      byLocation: { name: string; value: number }[]
+    }
+    users: {
+      totalResidents: number
+    }
+  } | null>(null)
+
+  // Enable all features for all officials as requested
+  const canViewReports = true
+  const reportsOnly = false
+  const isSK = false
+
   useEffect(() => {
     loadData()
     loadUsers()
     loadAnnouncements()
+    loadAnalytics()
     const storageHandler = (e: StorageEvent): void => {
       if (e.key === 'barangay_announcements') loadAnnouncements()
       if (e.key === 'barangay_service_requests') loadLocalServiceRequests()
@@ -176,6 +209,18 @@ export default function OfficialDashboard({ officialInfo, onLogout }: OfficialDa
       }
     }
   }, [])
+
+  const loadAnalytics = async (): Promise<void> => {
+    try {
+      const res = await fetch('/api/analytics')
+      const json = await res.json()
+      if (json.success) {
+        setAnalyticsData(json.data)
+      }
+    } catch (error) {
+      console.error('Failed to load analytics', error)
+    }
+  }
 
   const loadData = async (): Promise<void> => {
     // Instant local view to avoid delay
@@ -316,6 +361,37 @@ export default function OfficialDashboard({ officialInfo, onLogout }: OfficialDa
       if (!res.ok) throw new Error('api-failed')
       await loadData()
       toast.success(`Request ${referenceId} updated to ${newStatus}`)
+
+      // Notify resident about status update
+      const request = serviceRequests.find(r => r.referenceId === referenceId)
+      if (request) {
+        let message = `Your service request regarding ${request.documentType} has been updated to: ${newStatus.replace('_', ' ')}.`
+        
+        if (newStatus === 'ready_for_pickup' || newStatus === 'ready') {
+          message = `Good news! Your ${request.documentType} is ready for pickup at the Barangay Hall.`
+        } else if (newStatus === 'processing') {
+          message = `Your request for ${request.documentType} is now being processed.`
+        } else if (newStatus === 'rejected') {
+          message = `Your request for ${request.documentType} has been declined.`
+        }
+
+        const identifiers = [request.email, request.phone, request.fullName].filter(Boolean) as string[]
+        
+        await Promise.all(identifiers.map(recipientId => 
+          fetch('/api/notifications', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              recipientId,
+              type: 'ServiceRequest',
+              title: 'Service Request Update',
+              message,
+              relatedId: referenceId,
+              link: '/services'
+            })
+          })
+        )).catch(console.error)
+      }
     } catch {
       updateLocalServiceRequestStatus(referenceId, newStatus)
       const localReqs = getLocalServiceRequests()
@@ -336,6 +412,27 @@ export default function OfficialDashboard({ officialInfo, onLogout }: OfficialDa
       if (!res.ok) throw new Error('api-failed')
       await loadData()
       toast.success(`Report ${referenceId} updated to ${newStatus}`)
+
+      // Notify resident about status update
+      const report = reports.find(r => r.referenceId === referenceId)
+      if (report) {
+        const identifiers = [report.email, report.phone, report.fullName].filter(Boolean) as string[]
+        
+        await Promise.all(identifiers.map(recipientId => 
+          fetch('/api/notifications', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              recipientId,
+              type: 'Report',
+              title: 'Report Status Update',
+              message: `Your report regarding ${report.reportType} has been updated to: ${newStatus}.`,
+              relatedId: referenceId,
+              link: '/report'
+            })
+          })
+        )).catch(console.error)
+      }
     } catch {
       updateLocalReportStatus(referenceId, newStatus)
       const localReps = getLocalReports()
@@ -345,30 +442,36 @@ export default function OfficialDashboard({ officialInfo, onLogout }: OfficialDa
   }
 
   const handleDeleteServiceRequest = (referenceId: string): void => {
+    // Update local storage
     const reqs = getLocalServiceRequests().filter(r => r.referenceId !== referenceId)
-    localStorage.setItem('barangay_service_requests', JSON.stringify(reqs))
-    setServiceRequests(reqs as unknown as ServiceRequest[])
+    safeSetItem('barangay_service_requests', JSON.stringify(reqs))
+    
+    // Update state by filtering current state (preserving remote requests)
+    setServiceRequests(prev => prev.filter(r => r.referenceId !== referenceId))
+    
     setStats(prev => ({
       ...prev,
-      totalServiceRequests: reqs.length,
-      pendingServiceRequests: reqs.filter((r) => r.status === 'pending').length
+      totalServiceRequests: prev.totalServiceRequests - 1,
+      pendingServiceRequests: prev.pendingServiceRequests - (serviceRequests.find(r => r.referenceId === referenceId)?.status === 'pending' ? 1 : 0)
     }))
-    try { window.dispatchEvent(new Event('barangay_service_requests_updated')) } catch {}
     toast.success(`Service request ${referenceId} deleted`)
     void fetch(`/api/service-request?id=${referenceId}`, { method: 'DELETE' }).catch(() => {})
   }
 
   const handleDeleteReport = (referenceId: string): void => {
+    // Update local storage
     const reps = getLocalReports().filter(r => r.referenceId !== referenceId)
-    localStorage.setItem('barangay_reports', JSON.stringify(reps))
-    setReports(reps as unknown as Report[])
+    safeSetItem('barangay_reports', JSON.stringify(reps))
+    
+    // Update state by filtering current state (preserving remote reports)
+    setReports(prev => prev.filter(r => r.referenceId !== referenceId))
+    
     setStats(prev => ({
       ...prev,
-      totalReports: reps.length,
-      urgentReports: reps.filter((r) => r.priority === 'high').length,
-      resolvedReports: reps.filter((r) => r.status === 'resolved').length
+      totalReports: prev.totalReports - 1,
+      urgentReports: prev.urgentReports - (reports.find(r => r.referenceId === referenceId)?.priority === 'high' ? 1 : 0),
+      resolvedReports: prev.resolvedReports - (reports.find(r => r.referenceId === referenceId)?.status === 'resolved' ? 1 : 0)
     }))
-    try { window.dispatchEvent(new Event('barangay_reports_updated')) } catch {}
     toast.success(`Report ${referenceId} deleted`)
     void fetch(`/api/reports?id=${referenceId}`, { method: 'DELETE' }).catch(() => {})
   }
@@ -380,7 +483,7 @@ export default function OfficialDashboard({ officialInfo, onLogout }: OfficialDa
       const raw = localStorage.getItem('barangay_announcements')
       const anns: Announcement[] = raw ? JSON.parse(raw) as Announcement[] : []
       const updated = anns.filter(a => a.id !== id)
-      localStorage.setItem('barangay_announcements', JSON.stringify(updated))
+      safeSetItem('barangay_announcements', JSON.stringify(updated))
       setAnnouncements(updated)
       try { window.dispatchEvent(new Event('barangay_announcements_updated')) } catch {}
       toast.success('Announcement deleted')
@@ -406,11 +509,30 @@ export default function OfficialDashboard({ officialInfo, onLogout }: OfficialDa
       const raw = localStorage.getItem('barangay_announcements')
       const anns: Announcement[] = raw ? JSON.parse(raw) as Announcement[] : []
       const updated = [ann, ...anns]
-      localStorage.setItem('barangay_announcements', JSON.stringify(updated))
+      safeSetItem('barangay_announcements', JSON.stringify(updated))
       setAnnouncements(updated)
       setNewAnnouncement({ title: '', content: '', category: 'general', priority: 'medium' })
       setShowAnnouncementDialog(false)
       try { window.dispatchEvent(new Event('barangay_announcements_updated')) } catch {}
+      
+      // Notify all users about the announcement
+      users.forEach(user => {
+        if (user.email) {
+            fetch('/api/notifications', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    recipientId: user.email,
+                    type: 'Announcement',
+                    title: `New Announcement: ${newAnnouncement.title}`,
+                    message: newAnnouncement.content.substring(0, 100) + (newAnnouncement.content.length > 100 ? '...' : ''),
+                    relatedId: ann.id,
+                    link: '/announcements'
+                })
+            }).catch(console.error)
+        }
+      })
+
       toast.success('Announcement created successfully!')
     } catch {
       toast.error('Failed to create announcement')
@@ -450,93 +572,115 @@ export default function OfficialDashboard({ officialInfo, onLogout }: OfficialDa
         attachments: replyFiles.length > 0 ? replyFiles : undefined
       }
 
-      // Persist notification to the database after sending
+      // Save reply message to the corresponding record so the resident can see it in their account
+      try {
+        if (replyType === 'service-request') {
+          await fetch('/api/service-request', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: replyReferenceId, adminNotes: replyMessage })
+          })
+        } else {
+          await fetch('/api/reports', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: replyReferenceId, response: replyMessage })
+          })
+        }
 
-      // Send email/SMS via unified route
-      const emailResponse = await fetch('/api/notify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          channels: 'email',
-          toEmail: replyRecipient.email,
-          subject: `Re: ${replyType === 'service-request' ? 'Service Request' : 'Report'} ${replyReferenceId}`,
-          message: replyMessage,
-          referenceId: replyReferenceId,
-          type: replyType,
-          attachments: replyFiles.map((f) => ({ filename: f.name, contentBase64: (f.dataUrl || '').split(',')[1] || '' }))
-        })
-      })
-
-      if (emailResponse.ok) {
-        reply.emailSent = true
-      }
-
-      // Send SMS notification if phone number is provided
-      if (replyRecipient.phone) {
-        const smsResponse = await fetch('/api/notify', {
+      // Create notification for the resident for all available identifiers
+      const identifiers = [
+        replyRecipient.email,
+        replyRecipient.phone,
+        replyRecipient.name
+      ].filter(Boolean) as string[];
+      
+      await Promise.all(identifiers.map(recipientId => 
+        fetch('/api/notifications', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            channels: 'sms',
-            toPhone: replyRecipient.phone,
-            message: replyMessage,
-            referenceId: replyReferenceId,
-            type: replyType
+            recipientId,
+            type: 'Reply',
+            title: `New Reply from ${officialInfo.role}`,
+            message: `You have received a reply: "${replyMessage.length > 50 ? replyMessage.substring(0, 50) + '...' : replyMessage}"`,
+            relatedId: replyReferenceId,
+            link: replyType === 'service-request' ? '/services' : '/reports'
           })
         })
+      )).catch(console.error)
 
-        if (smsResponse.ok) {
-          reply.smsSent = true
-        }
-      }
-
-      const existingRaw = localStorage.getItem('barangay_replies')
-      const existing: Reply[] = existingRaw ? JSON.parse(existingRaw) as Reply[] : []
-      const updatedReplies = [reply, ...existing]
-      localStorage.setItem('barangay_replies', JSON.stringify(updatedReplies))
-
-      // Show appropriate success message
-      if (reply.emailSent && reply.smsSent) {
-        toast.success('Reply sent successfully!', {
-          description: `Email and SMS notifications sent to ${replyRecipient.name}`
+      // Save reply to persistent DB
+      await fetch('/api/replies', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          referenceId: replyReferenceId,
+          type: replyType,
+          officialName: officialInfo.name,
+          officialRole: officialInfo.role,
+          message: replyMessage,
+          recipientEmail: replyRecipient.email,
+          recipientPhone: replyRecipient.phone,
+          recipientName: replyRecipient.name,
+          attachments: replyFiles.length > 0 ? replyFiles : undefined
         })
-      } else if (reply.emailSent && !reply.smsSent && replyRecipient.phone) {
-        toast.success('Reply sent via email', {
-          description: 'SMS notification could not be sent, but email was delivered'
-        })
-      } else if (!reply.emailSent && reply.smsSent) {
-        toast.success('Reply sent via SMS', {
-          description: 'Email notification failed, but SMS was delivered'
-        })
-      } else if (reply.emailSent && !replyRecipient.phone) {
-        toast.success('Reply sent successfully!', {
-          description: `Email notification sent to ${replyRecipient.email}`
-        })
-      } else {
-        toast.warning('Reply saved but notifications failed', {
-          description: 'The reply has been recorded but could not be sent via email or SMS'
-        })
-      }
-
-      setShowReplyDialog(false)
-      setReplyMessage('')
-    } catch (error) {
-      console.error('Error sending reply:', error)
-      toast.error('Failed to send reply', {
-        description: 'Please try again later'
       })
-    } finally {
-      setIsSendingReply(false)
-    }
-  }
 
-  const handleViewReplies = async (referenceId: string): Promise<void> => {
+      // Force a re-fetch of the requests/reports to update the UI
+      await loadData()
+    } catch (error) {
+      console.error('Error in handleSendReply:', error)
+    }
+
+    const existingRaw = localStorage.getItem('barangay_replies')
+    const existing: Reply[] = existingRaw ? JSON.parse(existingRaw) as Reply[] : []
+    const updatedReplies = [reply, ...existing]
+    safeSetItem('barangay_replies', JSON.stringify(updatedReplies))
+    
+    // Fallback for offline/local view
+    try {
+      const perAccountKey = `replies:${replyRecipient.email || replyRecipient.phone || replyRecipient.name}`
+      const accRaw = localStorage.getItem(perAccountKey)
+      const acc: Reply[] = accRaw ? JSON.parse(accRaw) as Reply[] : []
+      safeSetItem(perAccountKey, JSON.stringify([reply, ...acc]))
+    } catch {}
+
+    toast.success('Reply sent successfully!', {
+      description: 'The resident will see this reply in their account and receive a notification.'
+    })
+
+    setShowReplyDialog(false)
+    setReplyMessage('')
+  } catch (error) {
+    console.error('Error sending reply:', error)
+    toast.error('Failed to send reply', { description: 'Please try again later' })
+  } finally {
+    setIsSendingReply(false)
+  }
+}
+
+const handleViewReplies = async (referenceId: string): Promise<void> => {
+  try {
+    const res = await fetch(`/api/replies?referenceId=${referenceId}`)
+    const json = await res.json()
+    if (json.success && json.replies) {
+      setRepliesHistory(json.replies)
+    } else {
+      // Fallback to local
+      const stored = localStorage.getItem('barangay_replies')
+      const all: Reply[] = stored ? JSON.parse(stored) as Reply[] : []
+      const replies = all.filter(r => r.referenceId === referenceId)
+      setRepliesHistory(replies)
+    }
+  } catch {
     const stored = localStorage.getItem('barangay_replies')
     const all: Reply[] = stored ? JSON.parse(stored) as Reply[] : []
     const replies = all.filter(r => r.referenceId === referenceId)
     setRepliesHistory(replies)
-    setShowRepliesDialog(true)
   }
+  setShowRepliesDialog(true)
+}
 
   const exportData = (type: string): void => {
     let data: unknown[] = []
@@ -620,19 +764,39 @@ export default function OfficialDashboard({ officialInfo, onLogout }: OfficialDa
     )
   }
 
-  const filteredServiceRequests = serviceRequests.filter(req =>
+  const sortData = (data: any[]) => {
+    return [...data].sort((a, b) => {
+      let aValue = a[sortConfig.key]
+      let bValue = b[sortConfig.key]
+
+      if (sortConfig.key === 'date') {
+        aValue = new Date(a.submittedAt || a.postedAt || a.createdAt || 0).getTime()
+        bValue = new Date(b.submittedAt || b.postedAt || b.createdAt || 0).getTime()
+      } else if (sortConfig.key === 'status') {
+        aValue = a.status || ''
+        bValue = b.status || ''
+      } else if (sortConfig.key === 'name') {
+        aValue = a.fullName || a.title || ''
+        bValue = b.fullName || b.title || ''
+      }
+
+      if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1
+      if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1
+      return 0
+    })
+  }
+
+  const filteredServiceRequests = sortData(serviceRequests.filter(req =>
     req.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
     req.referenceId.toLowerCase().includes(searchQuery.toLowerCase()) ||
     req.email.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+  ))
 
-  
-
-  const filteredReports = reports.filter(rep =>
+  const filteredReports = sortData(reports.filter(rep =>
     rep.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
     rep.referenceId.toLowerCase().includes(searchQuery.toLowerCase()) ||
     rep.location.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+  ))
 
   const filteredUsers = users.filter(user =>
     user.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -655,6 +819,7 @@ export default function OfficialDashboard({ officialInfo, onLogout }: OfficialDa
               </div>
             </div>
             <div className="flex items-center gap-3">
+              <RealTimeClock />
               <div className="text-right mr-4">
                 <p className="text-sm font-medium">{officialInfo.name}</p>
                 <p className="text-xs text-green-100">{officialInfo.role}</p>
@@ -721,10 +886,6 @@ export default function OfficialDashboard({ officialInfo, onLogout }: OfficialDa
               </CardContent>
             </Card>
 
-            
-
-            
-
             <Card className="border-l-4 border-l-red-500">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-sm font-medium">Reports</CardTitle>
@@ -735,6 +896,28 @@ export default function OfficialDashboard({ officialInfo, onLogout }: OfficialDa
                 <p className="text-xs text-gray-500 mt-1">
                   {stats.urgentReports} urgent • {stats.resolvedReports} resolved
                 </p>
+              </CardContent>
+            </Card>
+
+            <Card className="border-l-4 border-l-green-500">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium">Total Residents</CardTitle>
+                <Users className="h-4 w-4 text-green-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-green-600">{users.length}</div>
+                <p className="text-xs text-gray-500 mt-1">Registered members</p>
+              </CardContent>
+            </Card>
+
+            <Card className="border-l-4 border-l-purple-500">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium">System Health</CardTitle>
+                <Activity className="h-4 w-4 text-purple-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-purple-600">Active</div>
+                <p className="text-xs text-gray-500 mt-1">Real-time monitoring</p>
               </CardContent>
             </Card>
           </div>
@@ -750,13 +933,6 @@ export default function OfficialDashboard({ officialInfo, onLogout }: OfficialDa
             <CardContent>
               <div className="flex flex-wrap gap-3">
                 <Button
-                  onClick={() => setShowAnnouncementDialog(true)}
-                  className="bg-green-600 hover:bg-green-700"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  New Announcement
-                </Button>
-                <Button
                   variant="outline"
                   onClick={() => exportData('service-requests')}
                 >
@@ -770,9 +946,13 @@ export default function OfficialDashboard({ officialInfo, onLogout }: OfficialDa
                   <Eye className="h-4 w-4 mr-2" />
                   View All Service Requests
                 </Button>
-                
-                
-                
+                <Button
+                  onClick={() => setShowAnnouncementDialog(true)}
+                  className="bg-green-600 hover:bg-green-700"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  New Announcement
+                </Button>
                 <Button
                   variant="outline"
                   onClick={() => setShowAllReportsDialog(true)}
@@ -793,20 +973,28 @@ export default function OfficialDashboard({ officialInfo, onLogout }: OfficialDa
 
           {/* Management Tabs */}
           <Tabs defaultValue="service-requests" className="space-y-4">
-            <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="service-requests">
+            <TabsList className="flex flex-wrap w-full gap-2 md:gap-4 overflow-x-auto whitespace-nowrap">
+              <TabsTrigger value="service-requests" className="px-4 py-2">
                 <FileText className="h-4 w-4 mr-2" />
                 Services
               </TabsTrigger>
-              <TabsTrigger value="reports">
+              <TabsTrigger value="reports" className="px-4 py-2">
                 <AlertTriangle className="h-4 w-4 mr-2" />
                 Reports
               </TabsTrigger>
-              <TabsTrigger value="users">
+              <TabsTrigger value="analytics" className="px-4 py-2 mt-1 md:mt-0">
+                <TrendingUp className="h-4 w-4 mr-2" />
+                Analytics
+              </TabsTrigger>
+              <TabsTrigger value="map" className="px-4 py-2 mt-1 md:mt-0">
+                <MapPin className="h-4 w-4 mr-2" />
+                Community Map
+              </TabsTrigger>
+              <TabsTrigger value="users" className="px-4 py-2">
                 <Users className="h-4 w-4 mr-2" />
                 Users
               </TabsTrigger>
-              <TabsTrigger value="announcements">
+              <TabsTrigger value="announcements" className="px-4 py-2">
                 <Bell className="h-4 w-4 mr-2" />
                 Announcements
               </TabsTrigger>
@@ -822,6 +1010,24 @@ export default function OfficialDashboard({ officialInfo, onLogout }: OfficialDa
                       <CardDescription>Manage document service requests from residents</CardDescription>
                     </div>
                     <div className="flex items-center gap-2">
+                      <Select value={sortConfig.key} onValueChange={(val) => setSortConfig({ ...sortConfig, key: val })}>
+                        <SelectTrigger className="w-[130px]">
+                          <SelectValue placeholder="Sort by" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="date">Date</SelectItem>
+                          <SelectItem value="status">Status</SelectItem>
+                          <SelectItem value="name">Name</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => setSortConfig({ ...sortConfig, direction: sortConfig.direction === 'asc' ? 'desc' : 'asc' })}
+                        title={sortConfig.direction === 'asc' ? "Ascending" : "Descending"}
+                      >
+                        {sortConfig.direction === 'asc' ? "↑" : "↓"}
+                      </Button>
                       <Search className="h-4 w-4 text-gray-400" />
                       <Input
                         placeholder="Search..."
@@ -842,15 +1048,14 @@ export default function OfficialDashboard({ officialInfo, onLogout }: OfficialDa
                           <TableHead>Name</TableHead>
                           <TableHead>Document Type</TableHead>
                           <TableHead>Contact</TableHead>
-                          <TableHead>Date</TableHead>
-                          <TableHead>Status</TableHead>
+                          <TableHead>Date & Time</TableHead>
                           <TableHead>Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {filteredServiceRequests.length === 0 ? (
                           <TableRow>
-                            <TableCell colSpan={7} className="text-center text-gray-500">
+                            <TableCell colSpan={6} className="text-center text-gray-500">
                               No service requests found
                             </TableCell>
                           </TableRow>
@@ -866,25 +1071,9 @@ export default function OfficialDashboard({ officialInfo, onLogout }: OfficialDa
                                   <div className="text-gray-500">{request.phone}</div>
                                 </div>
                               </TableCell>
-                              <TableCell>{new Date(request.submittedAt).toLocaleDateString()}</TableCell>
-                              <TableCell>{getStatusBadge(request.status)}</TableCell>
+                              <TableCell>{new Date(request.submittedAt).toLocaleString()}</TableCell>
                               <TableCell>
                                 <div className="flex items-center gap-2">
-                                  <Select
-                                    value={request.status}
-                                    onValueChange={(value: string) => handleUpdateRequestStatus(request.referenceId, value)}
-                                  >
-                                    <SelectTrigger className="w-32">
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="pending">Pending</SelectItem>
-                                      <SelectItem value="in-progress">In Progress</SelectItem>
-                                      <SelectItem value="ready">Ready</SelectItem>
-                                      <SelectItem value="completed">Completed</SelectItem>
-                                      <SelectItem value="rejected">Rejected</SelectItem>
-                                    </SelectContent>
-                                  </Select>
                                   <Button
                                     variant="ghost"
                                     size="sm"
@@ -896,11 +1085,13 @@ export default function OfficialDashboard({ officialInfo, onLogout }: OfficialDa
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    onClick={() => handleOpenReply(
-                                      request.referenceId,
-                                      'service-request',
-                                      { email: request.email, phone: request.phone, name: request.fullName }
-                                    )}
+                                    onClick={() =>
+                                      handleOpenReply(
+                                        request.referenceId,
+                                        'service-request',
+                                        { email: request.email, phone: request.phone, name: request.fullName }
+                                      )
+                                    }
                                     title="Send Reply"
                                     className="text-green-600 hover:text-green-700 hover:bg-green-50"
                                   >
@@ -950,6 +1141,24 @@ export default function OfficialDashboard({ officialInfo, onLogout }: OfficialDa
                       <CardDescription>Review and respond to community reports</CardDescription>
                     </div>
                     <div className="flex items-center gap-2">
+                      <Select value={sortConfig.key} onValueChange={(val) => setSortConfig({ ...sortConfig, key: val })}>
+                        <SelectTrigger className="w-[130px]">
+                          <SelectValue placeholder="Sort by" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="date">Date</SelectItem>
+                          <SelectItem value="status">Status</SelectItem>
+                          <SelectItem value="name">Name</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => setSortConfig({ ...sortConfig, direction: sortConfig.direction === 'asc' ? 'desc' : 'asc' })}
+                        title={sortConfig.direction === 'asc' ? "Ascending" : "Descending"}
+                      >
+                        {sortConfig.direction === 'asc' ? "↑" : "↓"}
+                      </Button>
                       <Search className="h-4 w-4 text-gray-400" />
                       <Input
                         placeholder="Search..."
@@ -971,7 +1180,7 @@ export default function OfficialDashboard({ officialInfo, onLogout }: OfficialDa
                           <TableHead>Priority</TableHead>
                           <TableHead>Reporter</TableHead>
                           <TableHead>Location</TableHead>
-                          <TableHead>Date</TableHead>
+                          <TableHead>Date & Time</TableHead>
                           <TableHead>Status</TableHead>
                           <TableHead>Actions</TableHead>
                         </TableRow>
@@ -996,7 +1205,7 @@ export default function OfficialDashboard({ officialInfo, onLogout }: OfficialDa
                                 </div>
                               </TableCell>
                               <TableCell className="max-w-[200px] truncate">{report.location}</TableCell>
-                              <TableCell>{new Date(report.submittedAt).toLocaleDateString()}</TableCell>
+                              <TableCell>{new Date(report.submittedAt).toLocaleString()}</TableCell>
                               <TableCell>{getStatusBadge(report.status)}</TableCell>
                               <TableCell>
                                 <div className="flex items-center gap-2">
@@ -1117,7 +1326,7 @@ export default function OfficialDashboard({ officialInfo, onLogout }: OfficialDa
                               <TableCell>{user.email}</TableCell>
                               <TableCell>{user.phone}</TableCell>
                               <TableCell className="max-w-[200px] truncate">{user.address}</TableCell>
-                              <TableCell>{new Date(user.registeredAt).toLocaleDateString()}</TableCell>
+                              <TableCell>{new Date(user.registeredAt).toLocaleString()}</TableCell>
                               <TableCell>
                                 <Badge className={user.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}>
                                   {user.status}
@@ -1161,7 +1370,7 @@ export default function OfficialDashboard({ officialInfo, onLogout }: OfficialDa
                                     {getCategoryBadge(announcement.category)}
                                     {getPriorityBadge(announcement.priority)}
                                     <span className="text-xs text-gray-500">
-                                      {new Date(announcement.postedAt).toLocaleDateString()}
+                                      {new Date(announcement.postedAt).toLocaleString()}
                                     </span>
                                   </div>
                                 </div>
@@ -1189,13 +1398,174 @@ export default function OfficialDashboard({ officialInfo, onLogout }: OfficialDa
                 </CardContent>
               </Card>
             </TabsContent>
+            <TabsContent value="analytics" className="space-y-6 mt-2 md:mt-4">
+                <div className="grid gap-4 md:grid-cols-3">
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Total Requests</CardTitle>
+                      <FileText className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">{analyticsData?.requests.total ?? stats.totalServiceRequests}</div>
+                      <p className="text-xs text-muted-foreground">
+                        {(analyticsData?.requests.completed ?? 0)} completed
+                      </p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Total Reports</CardTitle>
+                      <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">{analyticsData?.reports.total ?? stats.totalReports}</div>
+                      <p className="text-xs text-muted-foreground">
+                        {(analyticsData?.reports.resolved ?? stats.resolvedReports)} resolved
+                      </p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Total Residents</CardTitle>
+                      <Users className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">{analyticsData?.users.totalResidents ?? stats.totalUsers}</div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Service Request Status</CardTitle>
+                    </CardHeader>
+                    <CardContent className="h-[300px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={analyticsData?.requests.byStatus ?? []}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={60}
+                            outerRadius={80}
+                            paddingAngle={5}
+                            dataKey="value"
+                          >
+                            {(analyticsData?.requests.byStatus ?? []).map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'][index % 5]} />
+                            ))}
+                          </Pie>
+                          <RechartsTooltip />
+                          <Legend />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Service Request Types</CardTitle>
+                    </CardHeader>
+                    <CardContent className="h-[300px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={analyticsData?.requests.byType ?? []} maxBarSize={50}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="name" />
+                          <YAxis allowDecimals={false} />
+                          <RechartsTooltip />
+                          <Bar dataKey="value" fill="#8884d8" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Incident Report Status</CardTitle>
+                    </CardHeader>
+                    <CardContent className="h-[300px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={analyticsData?.reports.byStatus ?? []}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={60}
+                            outerRadius={80}
+                            paddingAngle={5}
+                            dataKey="value"
+                          >
+                            {(analyticsData?.reports.byStatus ?? []).map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'][index % 5]} />
+                            ))}
+                          </Pie>
+                          <RechartsTooltip />
+                          <Legend />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Incident Report Categories</CardTitle>
+                    </CardHeader>
+                    <CardContent className="h-[300px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={analyticsData?.reports.byCategory ?? []} maxBarSize={50}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="name" />
+                          <YAxis allowDecimals={false} />
+                          <RechartsTooltip />
+                          <Bar dataKey="value" fill="#82ca9d" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Reports by Location */}
+                <div className="grid gap-4 md:grid-cols-1">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Reports by Location (Hotspots)</CardTitle>
+                      <CardDescription>Areas with the most reported incidents</CardDescription>
+                    </CardHeader>
+                    <CardContent className="h-[300px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={analyticsData?.reports.byLocation ?? []} maxBarSize={50}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="name" />
+                          <YAxis allowDecimals={false} />
+                          <RechartsTooltip />
+                          <Bar dataKey="value" fill="#ff8042" name="Reports" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+                </div>
+              </TabsContent>
+              <TabsContent value="map">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Barangay Community Map</CardTitle>
+                    <CardDescription>View and manage community locations, hazards, and landmarks</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="h-[700px] border rounded-lg overflow-hidden">
+                      <CommunityMapWrapper />
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
           </Tabs>
         </div>
       </main>
 
       {/* Create Announcement Dialog */}
       <Dialog open={showAnnouncementDialog} onOpenChange={setShowAnnouncementDialog}>
-        <DialogContent className="max-w-2xl z-[11000]">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Create New Announcement</DialogTitle>
             <DialogDescription>
@@ -1276,7 +1646,7 @@ export default function OfficialDashboard({ officialInfo, onLogout }: OfficialDa
 
       {/* Send Reply Dialog */}
       <Dialog open={showReplyDialog} onOpenChange={setShowReplyDialog}>
-        <DialogContent className="max-w-2xl z-[11000]">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Send Reply</DialogTitle>
             <DialogDescription>
@@ -1311,7 +1681,7 @@ export default function OfficialDashboard({ officialInfo, onLogout }: OfficialDa
             </div>
         <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-200">
           <p className="text-sm text-yellow-800">
-            ℹ️ This message will be sent to: <strong>{replyRecipient.email}</strong>{replyRecipient.phone && (<> and <strong>{replyRecipient.phone}</strong> via SMS</>)}
+                ℹ️ This message will be saved to the resident&apos;s account for request/report <strong>{replyReferenceId}</strong>.
           </p>
         </div>
         {replyType === 'service-request' && (
@@ -1377,7 +1747,7 @@ export default function OfficialDashboard({ officialInfo, onLogout }: OfficialDa
 
       {/* View Reply History Dialog */}
       <Dialog open={showRepliesDialog} onOpenChange={setShowRepliesDialog}>
-        <DialogContent className="max-w-3xl z-[10000]">
+        <DialogContent className="max-w-3xl">
           <DialogHeader>
             <DialogTitle>Reply History</DialogTitle>
             <DialogDescription>
@@ -1402,10 +1772,7 @@ export default function OfficialDashboard({ officialInfo, onLogout }: OfficialDa
                         </div>
                         <div className="text-right">
                           <p className="text-sm text-gray-500">
-                            {new Date(reply.sentAt).toLocaleDateString()}
-                          </p>
-                          <p className="text-xs text-gray-400">
-                            {new Date(reply.sentAt).toLocaleTimeString()}
+                            {new Date(reply.sentAt).toLocaleString()}
                           </p>
                         </div>
                       </div>
@@ -1451,7 +1818,7 @@ export default function OfficialDashboard({ officialInfo, onLogout }: OfficialDa
       {/* View Service Request Details Dialog */}
       {selectedRequest && (
         <Dialog open={!!selectedRequest} onOpenChange={() => setSelectedRequest(null)}>
-          <DialogContent className="z-[11000]">
+          <DialogContent>
             <DialogHeader>
               <DialogTitle>Service Request Details</DialogTitle>
               <DialogDescription>Reference ID: {selectedRequest.referenceId}</DialogDescription>
@@ -1471,6 +1838,25 @@ export default function OfficialDashboard({ officialInfo, onLogout }: OfficialDa
                   <p className="text-sm mt-1">{selectedRequest.phone}</p>
                 </div>
               </div>
+              {selectedRequest.idPicture && (
+                <div>
+                  <Label>Verification Picture</Label>
+                  <div className="mt-2 border rounded-lg overflow-hidden bg-gray-100 flex items-center justify-center min-h-[200px]">
+                    {selectedRequest.idPicture.startsWith('data:image') || selectedRequest.idPicture.startsWith('http') ? (
+                      <img 
+                        src={selectedRequest.idPicture} 
+                        alt="Verification" 
+                        className="max-w-full max-h-[400px] object-contain"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = 'https://placehold.co/400x300?text=Image+Load+Error';
+                        }}
+                      />
+                    ) : (
+                      <p className="text-gray-500 text-sm italic">{selectedRequest.idPicture}</p>
+                    )}
+                  </div>
+                </div>
+              )}
               <div>
                 <Label>Address</Label>
                 <p className="text-sm mt-1">{selectedRequest.address}</p>
@@ -1518,7 +1904,7 @@ export default function OfficialDashboard({ officialInfo, onLogout }: OfficialDa
                   <TableHead>Name</TableHead>
                   <TableHead>Document Type</TableHead>
                   <TableHead>Contact</TableHead>
-                  <TableHead>Date</TableHead>
+                  <TableHead>Date & Time</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>
@@ -1539,7 +1925,7 @@ export default function OfficialDashboard({ officialInfo, onLogout }: OfficialDa
                           <div className="text-gray-500">{request.phone}</div>
                         </div>
                       </TableCell>
-                      <TableCell>{new Date(request.submittedAt).toLocaleDateString()}</TableCell>
+                      <TableCell>{new Date(request.submittedAt).toLocaleString()}</TableCell>
                       <TableCell>{getStatusBadge(request.status)}</TableCell>
                     </TableRow>
                   ))
@@ -1558,7 +1944,7 @@ export default function OfficialDashboard({ officialInfo, onLogout }: OfficialDa
 
       {/* Full Reports View */}
       <Dialog open={showAllReportsDialog} onOpenChange={setShowAllReportsDialog}>
-        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto z-[11000]">
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>All Reports</DialogTitle>
             <DialogDescription>Browse all submitted community reports</DialogDescription>
@@ -1573,7 +1959,7 @@ export default function OfficialDashboard({ officialInfo, onLogout }: OfficialDa
                   <TableHead>Priority</TableHead>
                   <TableHead>Reporter</TableHead>
                   <TableHead>Location</TableHead>
-                  <TableHead>Date</TableHead>
+                  <TableHead>Date & Time</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>
@@ -1595,7 +1981,7 @@ export default function OfficialDashboard({ officialInfo, onLogout }: OfficialDa
                         </div>
                       </TableCell>
                       <TableCell className="max-w-[200px] truncate">{report.location}</TableCell>
-                      <TableCell>{new Date(report.submittedAt).toLocaleDateString()}</TableCell>
+                      <TableCell>{new Date(report.submittedAt).toLocaleString()}</TableCell>
                       <TableCell>{getStatusBadge(report.status)}</TableCell>
                     </TableRow>
                   ))
@@ -1610,7 +1996,7 @@ export default function OfficialDashboard({ officialInfo, onLogout }: OfficialDa
       {/* View Report Details Dialog */}
       {selectedReport && (
         <Dialog open={!!selectedReport} onOpenChange={() => setSelectedReport(null)}>
-          <DialogContent className="z-[11000]">
+          <DialogContent>
             <DialogHeader>
               <DialogTitle>Report Details</DialogTitle>
               <DialogDescription>Reference ID: {selectedReport.referenceId}</DialogDescription>
@@ -1648,6 +2034,25 @@ export default function OfficialDashboard({ officialInfo, onLogout }: OfficialDa
                 <Label>Description</Label>
                 <p className="text-sm mt-1 whitespace-pre-wrap">{selectedReport.description}</p>
               </div>
+              {(selectedReport as any).idPicture && (
+                <div>
+                  <Label>Verification Picture</Label>
+                  <div className="mt-2 border rounded-lg overflow-hidden bg-gray-100 flex items-center justify-center min-h-[200px]">
+                    {(selectedReport as any).idPicture.startsWith('data:image') || (selectedReport as any).idPicture.startsWith('http') ? (
+                      <img 
+                        src={(selectedReport as any).idPicture} 
+                        alt="Verification" 
+                        className="max-w-full max-h-[400px] object-contain"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = 'https://placehold.co/400x300?text=Image+Load+Error';
+                        }}
+                      />
+                    ) : (
+                      <p className="text-gray-500 text-sm italic">{(selectedReport as any).idPicture}</p>
+                    )}
+                  </div>
+                </div>
+              )}
               <div>
                 <Label>Status</Label>
                 <div className="mt-1">{getStatusBadge(selectedReport.status)}</div>

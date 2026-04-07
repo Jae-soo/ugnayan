@@ -5,11 +5,13 @@
  */
 
 import dbConnect, { setMongoUri } from './mongodb';
-import User from '@/models/User';
+import Resident from '@/models/Resident';
+import Official from '@/models/Official';
 import Announcement from '@/models/Announcement';
 import DocumentRequest from '@/models/DocumentRequest';
 import ServiceRequest from '@/models/ServiceRequest';
 import Report from '@/models/Report';
+import Reply from '@/models/Reply';
 import bcrypt from 'bcryptjs';
 
 // ============================================
@@ -25,7 +27,11 @@ export async function createUser(userData) {
   const { username, password, email, phone, fullName, address } = userData;
   
   // Check if user already exists
-  const existingUser = await User.findOne({ $or: [{ username }, { email }] });
+  const conditions = [{ username }];
+  if (email) {
+    conditions.push({ email });
+  }
+  const existingUser = await Resident.findOne({ $or: conditions });
   if (existingUser) {
     throw new Error('Username or email already exists');
   }
@@ -34,15 +40,20 @@ export async function createUser(userData) {
   const hashedPassword = await bcrypt.hash(password, 10);
   
   // Create user
-  const user = await User.create({
+  const userDataToCreate = {
     username,
     password: hashedPassword,
-    email,
     phone,
     fullName,
     address,
     isAdmin: false,
-  });
+  };
+
+  if (email) {
+    userDataToCreate.email = email;
+  }
+
+  const user = await Resident.create(userDataToCreate);
   
   return {
     id: user._id.toString(),
@@ -58,7 +69,7 @@ export async function createUser(userData) {
  */
 export async function findUserByUsername(username) {
   await dbConnect();
-  return await User.findOne({ username });
+  return await Resident.findOne({ username });
 }
 
 /**
@@ -73,7 +84,54 @@ export async function verifyUserPassword(password, hashedPassword) {
  */
 export async function getUserById(userId) {
   await dbConnect();
-  return await User.findById(userId);
+  return await Resident.findById(userId);
+}
+
+// ============================================
+// OFFICIAL OPERATIONS
+// ============================================
+
+/**
+ * Create a new official account
+ */
+export async function createOfficial(officialData) {
+  await dbConnect();
+  const { username, password, email, fullName, role } = officialData;
+
+  const conditions = [{ username }];
+  if (email) {
+    conditions.push({ email });
+  }
+  const existing = await Official.findOne({ $or: conditions });
+  if (existing) {
+    throw new Error('Username or email already exists');
+  }
+
+  const hashedPassword = await bcrypt.hash(password, 10);
+  const official = await Official.create({
+    username,
+    password: hashedPassword,
+    email: email || undefined, // Handle empty string by setting to undefined
+    fullName,
+    role,
+  });
+
+  return {
+    _id: official._id,
+    id: official._id.toString(),
+    username: official.username,
+    email: official.email,
+    fullName: official.fullName,
+    role: official.role,
+  };
+}
+
+/**
+ * Find official by username
+ */
+export async function findOfficialByUsername(username) {
+  await dbConnect();
+  return await Official.findOne({ username });
 }
 
 // ============================================
@@ -279,20 +337,22 @@ export async function createServiceRequest(requestData) {
     documentType,
     purpose,
     complaintType,
-    additionalInfo
+    additionalInfo,
+    idPicture
   } = requestData;
   
   const serviceRequest = await ServiceRequest.create({
     type,
     description,
     residentName,
-    residentEmail,
+    residentEmail: residentEmail?.toLowerCase(),
     residentPhone,
     residentAddress,
     documentType,
     purpose,
     complaintType,
     additionalInfo,
+    idPicture,
     status: 'pending',
   });
   
@@ -308,7 +368,46 @@ export async function getServiceRequests(filters = {}) {
   const query = {};
   if (filters.status) query.status = filters.status;
   if (filters.type) query.type = filters.type;
-  if (filters.email) query.residentEmail = filters.email;
+  
+  if (filters.email) {
+    const identifier = filters.email.toLowerCase();
+    const phoneDigits = identifier.replace(/\D/g, '');
+    
+    const orConditions = [
+      { residentEmail: identifier },
+      { residentPhone: identifier },
+      { residentName: { $regex: identifier, $options: 'i' } }
+    ];
+
+    // If it looks like a MongoDB ID
+    if (identifier.match(/^[0-9a-fA-F]{24}$/)) {
+      orConditions.push({ _id: identifier });
+    }
+
+    // Improved phone matching: handle 09, +639, 639 prefixes
+    if (phoneDigits.length >= 7) {
+      // Extract the last 10 digits (common for PH mobile numbers without the leading 0 or prefix)
+      const last10 = phoneDigits.slice(-10);
+      
+      orConditions.push(
+        { residentPhone: { $regex: phoneDigits, $options: 'i' } },
+        { residentPhone: { $regex: last10, $options: 'i' } }
+      );
+      
+      // If the identifier was +63999..., phoneDigits is 63999... 
+      // If stored number is 0999..., we should also check for that
+      if (phoneDigits.startsWith('63') && phoneDigits.length >= 12) {
+        const leadingZeroVersion = '0' + phoneDigits.slice(2);
+        orConditions.push({ residentPhone: leadingZeroVersion });
+      } else if (phoneDigits.startsWith('0') && phoneDigits.length === 11) {
+        const plus63Version = '+63' + phoneDigits.slice(1);
+        const nonPlus63Version = '63' + phoneDigits.slice(1);
+        orConditions.push({ residentPhone: plus63Version }, { residentPhone: nonPlus63Version });
+      }
+    }
+
+    query.$or = orConditions;
+  }
   
   return await ServiceRequest.find(query).sort({ createdAt: -1 });
 }
@@ -369,7 +468,8 @@ export async function createReport(reportData) {
     reporterName,
     reporterEmail,
     reporterPhone,
-    priority
+    priority,
+    idPicture
   } = reportData;
   
   const report = await Report.create({
@@ -378,9 +478,10 @@ export async function createReport(reportData) {
     description,
     location,
     reporterName,
-    reporterEmail,
+    reporterEmail: reporterEmail?.toLowerCase(),
     reporterPhone,
     priority: priority || 'medium',
+    idPicture,
     status: 'open',
   });
   
@@ -395,7 +496,44 @@ export async function getReports(filters = {}) {
   
   const query = {};
   if (filters.status) query.status = filters.status;
-  if (filters.email) query.reporterEmail = filters.email;
+  
+  if (filters.email) {
+    const identifier = filters.email.toLowerCase();
+    const phoneDigits = identifier.replace(/\D/g, '');
+    
+    const orConditions = [
+      { reporterEmail: identifier },
+      { reporterPhone: identifier },
+      { reporterName: { $regex: identifier, $options: 'i' } }
+    ];
+
+    // If it looks like a MongoDB ID
+    if (identifier.match(/^[0-9a-fA-F]{24}$/)) {
+      orConditions.push({ _id: identifier });
+    }
+
+    // Improved phone matching: handle 09, +639, 639 prefixes
+    if (phoneDigits.length >= 7) {
+      // Extract the last 10 digits
+      const last10 = phoneDigits.slice(-10);
+      
+      orConditions.push(
+        { reporterPhone: { $regex: phoneDigits, $options: 'i' } },
+        { reporterPhone: { $regex: last10, $options: 'i' } }
+      );
+      
+      if (phoneDigits.startsWith('63') && phoneDigits.length >= 12) {
+        const leadingZeroVersion = '0' + phoneDigits.slice(2);
+        orConditions.push({ reporterPhone: leadingZeroVersion });
+      } else if (phoneDigits.startsWith('0') && phoneDigits.length === 11) {
+        const plus63Version = '+63' + phoneDigits.slice(1);
+        const nonPlus63Version = '63' + phoneDigits.slice(1);
+        orConditions.push({ reporterPhone: plus63Version }, { reporterPhone: nonPlus63Version });
+      }
+    }
+
+    query.$or = orConditions;
+  }
   
   return await Report.find(query).sort({ createdAt: -1 });
 }
@@ -437,6 +575,52 @@ export async function deleteReport(reportId) {
   
   return { message: 'Report deleted successfully' };
 }
+
+// ============================================
+// REPLY OPERATIONS
+// ============================================
+
+/**
+ * Create a new reply for a request or report
+ */
+export async function createReply(replyData) {
+  await dbConnect();
+  
+  const {
+    referenceId,
+    type,
+    officialName,
+    officialRole,
+    message,
+    recipientEmail,
+    recipientPhone,
+    recipientName,
+    attachments
+  } = replyData;
+  
+  const reply = await Reply.create({
+    referenceId,
+    type,
+    officialName,
+    officialRole,
+    message,
+    recipientEmail,
+    recipientPhone,
+    recipientName,
+    attachments
+  });
+  
+  return reply;
+}
+
+/**
+ * Get all replies for a specific reference ID
+ */
+export async function getRepliesByReferenceId(referenceId) {
+  await dbConnect();
+  return await Reply.find({ referenceId }).sort({ createdAt: 1 });
+}
+
 
 // ============================================
 // UTILITY FUNCTIONS

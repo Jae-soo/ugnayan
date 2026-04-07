@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { getServiceRequests as getLocalServiceRequests, getReports as getLocalReports, updateServiceRequestStatus as updateLocalServiceRequestStatus, updateReportStatus as updateLocalReportStatus, getSyncServerId, setSyncMapEntry } from '@/lib/storage'
+import { getServiceRequests as getLocalServiceRequests, getReports as getLocalReports, updateServiceRequestStatus as updateLocalServiceRequestStatus, updateReportStatus as updateLocalReportStatus, getSyncServerId, setSyncMapEntry, safeSetItem } from '@/lib/storage'
 
 export interface UserProfile {
   id: string
@@ -186,7 +186,7 @@ export function useDatabase(): DatabaseState & DatabaseActions {
       if (data.success && data.user) {
         setUserProfile(data.user)
         setAuthenticated(true)
-        localStorage.setItem('ugnayan_user', JSON.stringify(data.user))
+        safeSetItem('ugnayan_user', JSON.stringify(data.user))
         setStatusMessage(`Welcome, ${data.user.fullName}!`)
         
         // Fetch user's data

@@ -3,7 +3,7 @@
 import React from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Phone, AlertCircle, Hospital, Shield, Flame, Droplet, Users } from 'lucide-react'
+import { Phone, AlertCircle, Hospital, Shield, Flame, Droplet, Users, ArrowLeft } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 
 interface EmergencyContact {
@@ -15,7 +15,7 @@ interface EmergencyContact {
   available: string
 }
 
-export default function EmergencyContacts(): React.JSX.Element {
+export default function EmergencyContacts({ onBack }: { onBack?: () => void }): React.JSX.Element {
   const emergencyContacts: EmergencyContact[] = [
     {
       name: 'National Emergency Hotline',
@@ -117,6 +117,16 @@ export default function EmergencyContacts(): React.JSX.Element {
 
   return (
     <div className="space-y-6">
+      {onBack && (
+        <Button 
+          variant="ghost" 
+          onClick={onBack}
+          className="flex items-center gap-2 text-gray-600 hover:text-red-600"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to Dashboard
+        </Button>
+      )}
       <Card className="shadow-lg border-l-4 border-l-red-500">
         <CardHeader className="bg-gradient-to-r from-red-600 to-red-700 text-white">
           <CardTitle className="flex items-center gap-2 text-2xl">

@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Bell, Calendar, Users, AlertCircle, Plus } from 'lucide-react'
+import { Bell, Calendar, Users, AlertCircle, Plus, ArrowLeft } from 'lucide-react'
 import { Separator } from '@/components/ui/separator'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { safeSetItem } from '@/lib/storage'
 
 interface Announcement {
   id: string
@@ -23,7 +24,7 @@ interface Announcement {
   postedAt: string
 }
 
-export default function AnnouncementsBoard(): React.JSX.Element {
+export default function AnnouncementsBoard({ onBack }: { onBack?: () => void }): React.JSX.Element {
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [isLoading, setIsLoading] = useState<boolean>(true)
   const [isOfficial, setIsOfficial] = useState<boolean>(false)
@@ -129,7 +130,7 @@ export default function AnnouncementsBoard(): React.JSX.Element {
       const existingRaw = localStorage.getItem('barangay_announcements')
       const existing: Announcement[] = existingRaw ? JSON.parse(existingRaw) as Announcement[] : []
       const updated = [ann, ...existing]
-      localStorage.setItem('barangay_announcements', JSON.stringify(updated))
+      safeSetItem('barangay_announcements', JSON.stringify(updated))
       setAnnouncements(updated)
       toast.success('Announcement created')
       setNewAnnouncement({ title: '', content: '', category: 'general', priority: 'medium', eventDate: '' })
@@ -138,6 +139,15 @@ export default function AnnouncementsBoard(): React.JSX.Element {
     } catch {
       toast.error('Failed to save announcement')
     }
+  }
+
+  const handleDeleteAnnouncement = (id: string): void => {
+    if (!confirm('Are you sure you want to delete this announcement?')) return
+    const updated = announcements.filter(a => a.id !== id)
+    safeSetItem('barangay_announcements', JSON.stringify(updated))
+    setAnnouncements(updated)
+    try { window.dispatchEvent(new Event('barangay_announcements_updated')) } catch {}
+    toast.success('Announcement deleted')
   }
 
   const formatDate = (dateString: string): string => {
@@ -184,6 +194,16 @@ export default function AnnouncementsBoard(): React.JSX.Element {
 
   return (
     <div className="space-y-6">
+      {onBack && (
+        <Button 
+          variant="ghost" 
+          onClick={onBack}
+          className="flex items-center gap-2 text-gray-600 hover:text-purple-700"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to Dashboard
+        </Button>
+      )}
       <Card className="shadow-lg">
         <CardHeader className="bg-gradient-to-r from-purple-600 to-purple-700 text-white">
           <CardTitle className="flex items-center gap-2 text-2xl">

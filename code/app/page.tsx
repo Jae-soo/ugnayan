@@ -3,7 +3,6 @@ export const dynamic = 'force-static'
 import React, { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { 
   Home, 
@@ -21,9 +20,12 @@ import {
   CloudRain,
   Mountain,
   LogIn,
-  LogOut
+  LogOut,
+  TrendingUp,
+  Search
 } from 'lucide-react'
 import ServiceRequestForm from '@/components/ServiceRequestForm'
+import BlotterForm from '@/components/BlotterForm'
 import ReportForm from '@/components/ReportForm'
 import CommunityMapWrapper from '@/components/CommunityMapWrapper'
 import AnnouncementsBoard from '@/components/AnnouncementsBoard'
@@ -31,20 +33,31 @@ import FeedbackSystem from '@/components/FeedbackSystem'
 import EmergencyContacts from '@/components/EmergencyContacts'
 import MyRequests from '@/components/MyRequests'
 import RealTimeClock from '@/components/RealTimeClock'
-import OfficialLogin from '@/components/OfficialLogin'
+// Official login removed from resident dashboard
+// Official login removed from resident dashboard
 import ChatbotWidget from '@/components/ChatbotWidget'
 import OfficialDashboard from '@/components/OfficialDashboard'
 import WelcomePage from '@/components/WelcomePage'
+import UserLogin from '@/components/UserLogin'
+import UserRegistration from '@/components/UserRegistration'
 import { sdk } from "@farcaster/miniapp-sdk"
 import { toast } from 'sonner'
 import { useAddMiniApp } from "@/hooks/useAddMiniApp";
 import { useQuickAuth } from "@/hooks/useQuickAuth";
 import { useIsInFarcaster } from "@/hooks/useIsInFarcaster";
+import { useRouter } from 'next/navigation'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import NotificationsBell from '@/components/NotificationsBell'
+import NotificationCenter from '@/components/NotificationCenter'
+import type { ServiceRequest, Report } from '@/lib/types'
+import { getServiceRequests, getReports, getUserServiceRequests, getUserReports, safeSetItem } from '@/lib/storage'
 
 export default function UgnayanApp(): React.JSX.Element {
     const { addMiniApp } = useAddMiniApp();
     const isInFarcaster = useIsInFarcaster()
     useQuickAuth('promised-moving-017.app.ohara.ai')
+    const router = useRouter()
     useEffect(() => {
       const tryAddMiniApp = async () => {
         try {
@@ -93,25 +106,222 @@ export default function UgnayanApp(): React.JSX.Element {
       initializeFarcaster();
     }, []);
   const [activeTab, setActiveTab] = useState<string>('home')
+  const [showNotificationCenter, setShowNotificationCenter] = useState<boolean>(false)
+  const [serviceSubTab, setServiceSubTab] = useState<'documents' | 'blotter' | 'myrequests'>('documents')
   const [loginOpen, setLoginOpen] = useState<boolean>(false)
   const [loggedInOfficial, setLoggedInOfficial] = useState<{ username: string; role: string; name: string } | null>(null)
   const [showWelcome, setShowWelcome] = useState<boolean>(true)
+  const [residentUser, setResidentUser] = useState<{ id: string; username: string; fullName: string; email: string; phone: string; address: string; isAdmin: boolean } | null>(null)
+  const [residentLoginOpen, setResidentLoginOpen] = useState<boolean>(false)
+  const [residentRegisterOpen, setResidentRegisterOpen] = useState<boolean>(false)
+  const [isLoading, setIsLoading] = useState<boolean>(true)
+  type NotificationItem = { 
+    id: string; 
+    type: 'ServiceRequest' | 'Report' | 'Reply' | 'Announcement' | string; 
+    entityId: string; 
+    message: string; 
+    createdAt: number; 
+    read: boolean 
+  }
+  const [notifications, setNotifications] = useState<NotificationItem[]>([])
 
   useEffect(() => {
     try {
       const stored = localStorage.getItem('official')
       const visitedBefore = localStorage.getItem('visited_ugnayan')
+      const storedResident = localStorage.getItem('resident_user')
+      
       if (stored) {
         const official = JSON.parse(stored)
         setLoggedInOfficial(official)
         setShowWelcome(false)
-      } else if (visitedBefore) {
+        setIsLoading(false)
+      } else if (storedResident) {
+        const user = JSON.parse(storedResident)
+        setResidentUser(user)
         setShowWelcome(false)
+        setIsLoading(false)
+      } else if (!visitedBefore) {
+        setShowWelcome(true)
+        setIsLoading(false)
+      } else {
+        // Not logged in and visited before, redirect to login
+        router.replace('/login')
       }
     } catch {
-      // Ignore parse errors; keep defaults
+      setIsLoading(false)
     }
-  }, [])
+  }, [router])
+
+  const notifKey = (u?: { id: string; email: string }): string => {
+    const k = u?.id || u?.email || 'anonymous'
+    return `notifications:${k}`
+  }
+
+  useEffect(() => {
+    try {
+      if (!residentUser) return
+      const raw = localStorage.getItem(notifKey(residentUser))
+      const parsed: NotificationItem[] = raw ? JSON.parse(raw) : []
+      setNotifications(parsed)
+    } catch {}
+  }, [residentUser])
+
+  const persistNotifications = (items: NotificationItem[]): void => {
+    try { safeSetItem(notifKey(residentUser || undefined), JSON.stringify(items)) } catch {}
+  }
+
+  const markAllNotificationsRead = (): void => {
+    setNotifications(prev => {
+      const next = prev.map(n => ({ ...n, read: true }))
+      persistNotifications(next)
+      return next
+    })
+  }
+
+  const clearNotifications = (): void => {
+    setNotifications([])
+    persistNotifications([])
+  }
+
+  useEffect(() => {
+    let timer: any
+    const poll = async (): Promise<void> => {
+      try {
+        if (!residentUser) return
+        
+        // 1. Fetch Cloud Notifications for all possible identifiers
+        const identifiers = [
+          residentUser.email,
+          residentUser.phone,
+          residentUser.fullName,
+          residentUser.id
+        ].filter(Boolean) as string[]
+
+        const notifPromises = identifiers.map(id => 
+          fetch(`/api/notifications?username=${encodeURIComponent(id)}`).then(res => res.json())
+        )
+        const notifResults = await Promise.all(notifPromises)
+        
+        // 2. Fetch Requests & Reports for Status Changes
+        const [reqRes, repRes] = await Promise.all([
+          fetch(`/api/service-request?email=${encodeURIComponent(residentUser.email || residentUser.id || residentUser.phone)}`),
+          fetch(`/api/reports?email=${encodeURIComponent(residentUser.email || residentUser.id || residentUser.phone)}`)
+        ])
+        
+        const reqJson = await reqRes.json().catch(() => ({ success: false, serviceRequests: [] }))
+        const repJson = await repRes.json().catch(() => ({ success: false, reports: [] }))
+        
+        const prevMapRaw = localStorage.getItem(`notif_prev:${notifKey(residentUser)}`)
+        const prevMap = prevMapRaw ? JSON.parse(prevMapRaw) as Record<string, { status?: string; note?: string }> : {}
+        const nextPrev: Record<string, { status?: string; note?: string }> = { ...prevMap }
+        
+        const cloudNotifs: NotificationItem[] = []
+        const pushNotifs: NotificationItem[] = []
+
+        // Process Cloud Notifications from all identifiers
+        for (const notifData of notifResults) {
+          if (notifData.success && Array.isArray(notifData.notifications)) {
+            for (const n of notifData.notifications) {
+              cloudNotifs.push({
+                id: n._id,
+                type: n.type || 'Reply',
+                entityId: n.relatedId || '',
+                message: n.message,
+                createdAt: new Date(n.createdAt).getTime(),
+                read: n.read || false
+              })
+            }
+          }
+        }
+
+        const push = (type: 'ServiceRequest' | 'Report', idStr: string, status: string): void => {
+          const item: NotificationItem = {
+            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            type,
+            entityId: idStr,
+            message: `${type === 'ServiceRequest' ? 'Service request' : 'Report'} ${idStr} updated to ${status}`,
+            createdAt: Date.now(),
+            read: false
+          }
+          pushNotifs.push(item)
+        }
+
+        const pushReply = (type: 'ServiceRequest' | 'Report', idStr: string, message: string): void => {
+          const item: NotificationItem = {
+            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            type,
+            entityId: idStr,
+            message: `Reply on ${type === 'ServiceRequest' ? 'service request' : 'report'} ${idStr}: ${message}`,
+            createdAt: Date.now(),
+            read: false
+          }
+          pushNotifs.push(item)
+        }
+
+        if (reqJson && reqJson.success && Array.isArray(reqJson.serviceRequests)) {
+          for (const r of reqJson.serviceRequests) {
+            const idStr = String(r._id || r.id || r.requestId || '')
+            const prev = prevMap[idStr] || {}
+            const currStatus = String(r.status || '')
+            const currNote = String(r.adminNotes || r.additionalInfo || '')
+            nextPrev[idStr] = { status: currStatus, note: currNote }
+            if (prev.status && prev.status !== currStatus) push('ServiceRequest', idStr, currStatus)
+            if (currNote && prev.note !== currNote) pushReply('ServiceRequest', idStr, currNote)
+          }
+        }
+
+        if (repJson && repJson.success && Array.isArray(repJson.reports)) {
+          for (const rp of repJson.reports) {
+            const idStr = String(rp._id || rp.id || rp.reportId || '')
+            const prev = prevMap[idStr] || {}
+            const currStatus = String(rp.status || '')
+            const currNote = String(rp.response || '')
+            nextPrev[idStr] = { status: currStatus, note: currNote }
+            if (prev.status && prev.status !== currStatus) push('Report', idStr, currStatus)
+            if (currNote && prev.note !== currNote) pushReply('Report', idStr, currNote)
+          }
+        }
+
+        if (Object.keys(nextPrev).length > 0) {
+          try { safeSetItem(`notif_prev:${notifKey(residentUser)}`, JSON.stringify(nextPrev)) } catch {}
+        }
+
+        setNotifications(prev => {
+          const next = [...prev];
+          let changed = false;
+          
+          for (const n of cloudNotifs) {
+            if (!next.some(existing => existing.id === n.id)) {
+              next.unshift(n);
+              changed = true;
+            }
+          }
+          
+          for (const n of pushNotifs) {
+            if (!next.some(existing => existing.id === n.id)) {
+              next.unshift(n);
+              changed = true;
+            }
+          }
+          
+          if (changed) {
+            const final = next.slice(0, 100);
+            persistNotifications(final);
+            return final;
+          }
+          return prev;
+        })
+      } catch (err) {
+        console.error('Polling error:', err)
+      }
+    }
+    timer = setInterval(poll, 15000)
+    poll()
+    return () => { try { clearInterval(timer) } catch {} }
+  }, [residentUser])
+
+
 
   const [latestAnnouncements, setLatestAnnouncements] = useState<Array<{ id: string; title: string; category: string; content: string; postedAt: string; eventDate?: string; priority: string }>>([])
   const [loadingAnnouncements, setLoadingAnnouncements] = useState<boolean>(true)
@@ -153,20 +363,48 @@ export default function UgnayanApp(): React.JSX.Element {
     setShowWelcome(true)
     setActiveTab('home')
     toast.success('Logged out successfully')
+    try { router.replace('/login') } catch {}
   }
 
   const handleResidentContinue = (): void => {
-    localStorage.setItem('visited_ugnayan', 'true')
-    setShowWelcome(false)
-    toast.success('Welcome to Barangay Irisan!')
+    safeSetItem('visited_ugnayan', 'true')
+    router.push('/login')
   }
 
-  const handleOfficialLoginClick = (): void => {
-    setLoginOpen(true)
+  const handleResidentLoginSuccess = (): void => {
+    try {
+      const storedResident = localStorage.getItem('resident_user')
+      if (storedResident) {
+        const user = JSON.parse(storedResident) as { id: string; username: string; fullName: string; email: string; phone: string; address: string; isAdmin: boolean }
+        setResidentUser(user)
+      }
+    } catch {
+    }
   }
+
+  const handleResidentLogout = (): void => {
+    try {
+      localStorage.removeItem('resident_user')
+      localStorage.removeItem('spacetime_token')
+    } catch {
+    }
+    setResidentUser(null)
+    toast.success('Logged out successfully')
+    try { router.replace('/login') } catch {}
+  }
+
+  // Official login click removed from resident dashboard
 
   if (loggedInOfficial) {
     return <OfficialDashboard officialInfo={loggedInOfficial} onLogout={handleLogout} />
+  }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
+      </div>
+    )
   }
 
   return (
@@ -174,7 +412,6 @@ export default function UgnayanApp(): React.JSX.Element {
       {showWelcome ? (
         <WelcomePage 
           onResidentContinue={handleResidentContinue}
-          onOfficialLogin={handleOfficialLoginClick}
         />
       ) : (
     <div className="min-h-screen bg-gradient-to-br from-green-50 via-blue-50 to-green-50">
@@ -183,27 +420,47 @@ export default function UgnayanApp(): React.JSX.Element {
         <div className="container mx-auto px-4 py-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <div className="bg-white p-2 rounded-full">
-                <Shield className="h-8 w-8 text-green-600" />
-              </div>
+              <Shield className="h-8 w-8 text-white opacity-90" />
               <div>
                 <h1 className="text-3xl font-bold">Ugnayan</h1>
                 <p className="text-green-100 text-sm">Barangay Irisan Service Portal</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <Badge variant="secondary" className="bg-green-800 text-white px-4 py-2">
-                Baguio City
-              </Badge>
+              <span className="text-white/90 text-sm">Baguio City</span>
               <RealTimeClock />
-              <Button
-                variant="secondary"
-                onClick={() => setLoginOpen(true)}
-                className="bg-white text-green-700 hover:bg-green-50"
-              >
-                <LogIn className="h-4 w-4 mr-2" />
-                Official Login
-              </Button>
+              <NotificationsBell
+                notifications={notifications}
+                onMarkAllRead={markAllNotificationsRead}
+                onClearAll={clearNotifications}
+                onOpenCenter={() => setShowNotificationCenter(true)}
+              />
+              {residentUser ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger className="flex items-center gap-2 focus:outline-none">
+                    <Avatar className="h-8 w-8">
+                      <AvatarFallback>{(residentUser.fullName?.[0] || residentUser.username?.[0] || 'U').toUpperCase()}</AvatarFallback>
+                    </Avatar>
+                    <span className="text-sm">{residentUser.fullName}</span>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={handleResidentLogout}>
+                      <LogOut className="h-4 w-4 mr-2" />
+                      Logout
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : (
+                <Button
+                  variant="outline"
+                  onClick={() => setResidentLoginOpen(true)}
+                  className="border-white text-white hover:bg-green-700"
+                >
+                  <LogIn className="h-4 w-4 mr-2" />
+                  Resident Login
+                </Button>
+              )}
+              {/* Official Login button removed */}
             </div>
           </div>
         </div>
@@ -211,6 +468,33 @@ export default function UgnayanApp(): React.JSX.Element {
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
+        {showNotificationCenter ? (
+          <NotificationCenter 
+            residentUser={residentUser} 
+            onBack={() => setShowNotificationCenter(false)} 
+            onNavigate={(tab) => {
+              setActiveTab(tab)
+              setShowNotificationCenter(false)
+            }}
+          />
+        ) : (
+          <>
+            {/* Welcome Section - Now at the Top */}
+            <Card className="bg-gradient-to-r from-green-600 to-green-700 text-white border-none shadow-xl mb-8">
+          <CardHeader>
+            <CardTitle className="text-3xl">Welcome to Barangay Irisan</CardTitle>
+            <CardDescription className="text-green-100">
+              Your digital gateway to community services and assistance
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-lg mb-2">
+              Ugnayan is your one-stop platform for accessing barangay services, reporting issues, 
+              and staying connected with our community in Baguio City.
+            </p>
+          </CardContent>
+        </Card>
+
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           {/* Navigation Tabs */}
           <TabsList className="grid gap-2 bg-white p-2 shadow-md h-auto grid-cols-4 lg:grid-cols-8">
@@ -242,45 +526,81 @@ export default function UgnayanApp(): React.JSX.Element {
               <Phone className="h-5 w-5" />
               <span className="text-xs">Emergency</span>
             </TabsTrigger>
-            <TabsTrigger value="myrequests" className="flex flex-col items-center gap-1 py-3">
-              <Users className="h-5 w-5" />
-              <span className="text-xs">My Requests</span>
-            </TabsTrigger>
           </TabsList>
 
           {/* Home Tab */}
           <TabsContent value="home" className="space-y-6">
-            {/* Welcome Section */}
-            <Card className="bg-gradient-to-r from-green-600 to-green-700 text-white border-none shadow-xl">
-              <CardHeader>
-                <CardTitle className="text-3xl">Welcome to Barangay Irisan</CardTitle>
-                <CardDescription className="text-green-100">
-                  Your digital gateway to community services and assistance
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-lg mb-4">
-                  Ugnayan is your one-stop platform for accessing barangay services, reporting issues, 
-                  and staying connected with our community in Baguio City.
-                </p>
-                <div className="flex flex-wrap gap-3">
-                  <Button 
-                    variant="secondary" 
-                    onClick={() => setActiveTab('services')}
-                    className="bg-white text-green-700 hover:bg-green-50"
-                  >
-                    Request Services
-                  </Button>
-                  <Button 
-                    variant="secondary" 
-                    onClick={() => setActiveTab('report')}
-                    className="bg-green-800 text-white hover:bg-green-900"
-                  >
-                    Report an Issue
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+            {/* Emergency Contacts on Home */}
+            <div>
+              <h2 className="text-2xl font-bold mb-4 text-gray-800">In Case of Emergency</h2>
+              <Card className="border-l-4 border-l-red-500">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2">
+                    <Phone className="h-5 w-5 text-red-600" />
+                    Quick Contacts
+                  </CardTitle>
+                  <CardDescription>Immediate access to essential hotlines</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid md:grid-cols-3 gap-4">
+                    <Card className="border">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="flex items-center justify-between text-lg">
+                          <span>911</span>
+                          <span className="text-xs text-gray-500">24/7</span>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-sm text-gray-600 mb-2">National Emergency Hotline</p>
+                        <Button size="sm" className="bg-red-600 hover:bg-red-700" onClick={() => window.location.href = 'tel:911'}>
+                          <Phone className="h-4 w-4 mr-1" />
+                          Call
+                        </Button>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="border">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="flex items-center justify-between text-lg">
+                          <span>(074) 123-4567</span>
+                          <span className="text-xs text-gray-500">Office</span>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-sm text-gray-600 mb-2">Barangay Irisan Office</p>
+                        <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => window.location.href = 'tel:0741234567'}>
+                          <Phone className="h-4 w-4 mr-1" />
+                          Call
+                        </Button>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="border">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="flex items-center justify-between text-lg">
+                          <span>(074) 442-4216</span>
+                          <span className="text-xs text-gray-500">Hospital</span>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-sm text-gray-600 mb-2">Baguio General Hospital</p>
+                        <Button size="sm" className="bg-blue-600 hover:bg-blue-700" onClick={() => window.location.href = 'tel:0744424216'}>
+                          <Phone className="h-4 w-4 mr-1" />
+                          Call
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  </div>
+                  <div className="mt-4">
+                    <Button variant="outline" onClick={() => setActiveTab('emergency')}>
+                      View full emergency list
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+
 
             <div>
               <h2 className="text-2xl font-bold mb-4 text-gray-800">Latest Announcements</h2>
@@ -325,142 +645,6 @@ export default function UgnayanApp(): React.JSX.Element {
                   ))}
                 </div>
               )}
-            </div>
-
-            {/* Quick Services */}
-            <div>
-              <h2 className="text-2xl font-bold mb-4 text-gray-800">Quick Access Services</h2>
-              <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <Card 
-                  className="cursor-pointer hover:shadow-lg transition-all hover:scale-105"
-                  onClick={() => setActiveTab('services')}
-                >
-                  <CardHeader>
-                    <FileText className="h-10 w-10 text-blue-600 mb-2" />
-                    <CardTitle className="text-lg">Document Requests</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-gray-600">
-                      Request barangay clearance, certificates, and permits online
-                    </p>
-                  </CardContent>
-                </Card>
-
-                <Card 
-                  className="cursor-pointer hover:shadow-lg transition-all hover:scale-105"
-                  onClick={() => setActiveTab('report')}
-                >
-                  <CardHeader>
-                    <AlertTriangle className="h-10 w-10 text-orange-600 mb-2" />
-                    <CardTitle className="text-lg">Report Issues</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-gray-600">
-                      File complaints, report emergencies, or hazards in the area
-                    </p>
-                  </CardContent>
-                </Card>
-
-                <Card 
-                  className="cursor-pointer hover:shadow-lg transition-all hover:scale-105"
-                  onClick={() => setActiveTab('map')}
-                >
-                  <CardHeader>
-                    <Map className="h-10 w-10 text-green-600 mb-2" />
-                    <CardTitle className="text-lg">Community Map</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-gray-600">
-                      View transportation, streetlights, and hazard zones
-                    </p>
-                  </CardContent>
-                </Card>
-
-                <Card 
-                  className="cursor-pointer hover:shadow-lg transition-all hover:scale-105"
-                  onClick={() => setActiveTab('announcements')}
-                >
-                  <CardHeader>
-                    <Bell className="h-10 w-10 text-purple-600 mb-2" />
-                    <CardTitle className="text-lg">Announcements</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-gray-600">
-                      Stay updated with community news and events
-                    </p>
-                  </CardContent>
-                </Card>
-              </div>
-            </div>
-
-            {/* Emergency Contacts on Home */}
-            <div>
-              <h2 className="text-2xl font-bold mb-4 text-gray-800">In Case of Emergency</h2>
-              <Card className="border-l-4 border-l-red-500">
-                <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center gap-2">
-                    <Phone className="h-5 w-5 text-red-600" />
-                    Quick Contacts
-                  </CardTitle>
-                  <CardDescription>Immediate access to essential hotlines</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid md:grid-cols-3 gap-4">
-                    <Card className="border">
-                      <CardHeader className="pb-2">
-                        <CardTitle className="flex items-center justify-between text-lg">
-                          <span>911</span>
-                          <Badge variant="secondary" className="text-xs">24/7</Badge>
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <p className="text-sm text-gray-600 mb-2">National Emergency Hotline</p>
-                        <Button size="sm" className="bg-red-600 hover:bg-red-700" onClick={() => window.location.href = 'tel:911'}>
-                          <Phone className="h-4 w-4 mr-1" />
-                          Call
-                        </Button>
-                      </CardContent>
-                    </Card>
-
-                    <Card className="border">
-                      <CardHeader className="pb-2">
-                        <CardTitle className="flex items-center justify-between text-lg">
-                          <span>(074) 123-4567</span>
-                          <Badge variant="secondary" className="text-xs">Office</Badge>
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <p className="text-sm text-gray-600 mb-2">Barangay Irisan Office</p>
-                        <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => window.location.href = 'tel:0741234567'}>
-                          <Phone className="h-4 w-4 mr-1" />
-                          Call
-                        </Button>
-                      </CardContent>
-                    </Card>
-
-                    <Card className="border">
-                      <CardHeader className="pb-2">
-                        <CardTitle className="flex items-center justify-between text-lg">
-                          <span>(074) 442-4216</span>
-                          <Badge variant="secondary" className="text-xs">Hospital</Badge>
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <p className="text-sm text-gray-600 mb-2">Baguio General Hospital</p>
-                        <Button size="sm" className="bg-blue-600 hover:bg-blue-700" onClick={() => window.location.href = 'tel:0744424216'}>
-                          <Phone className="h-4 w-4 mr-1" />
-                          Call
-                        </Button>
-                      </CardContent>
-                    </Card>
-                  </div>
-                  <div className="mt-4">
-                    <Button variant="outline" onClick={() => setActiveTab('emergency')}>
-                      View full emergency list
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
             </div>
 
             {/* Barangay Information */}
@@ -537,44 +721,98 @@ export default function UgnayanApp(): React.JSX.Element {
           </TabsContent>
 
           {/* Service Requests Tab */}
-          <TabsContent value="services">
-            <ServiceRequestForm />
+          <TabsContent value="services" className="space-y-6">
+            <div className="flex flex-col items-center justify-center mb-6">
+              <h2 className="text-2xl font-bold text-gray-800 mb-4">Select Service Type</h2>
+              <div className="inline-flex p-1 bg-gray-100 rounded-lg border border-gray-200">
+                <Button 
+                  variant={serviceSubTab === 'documents' ? 'default' : 'ghost'}
+                  onClick={() => setServiceSubTab('documents')}
+                  className={serviceSubTab === 'documents' ? 'bg-blue-600' : ''}
+                >
+                  <FileText className="mr-2 h-4 w-4" />
+                  Document Requests
+                </Button>
+                <Button 
+                  variant={serviceSubTab === 'blotter' ? 'default' : 'ghost'}
+                  onClick={() => setServiceSubTab('blotter')}
+                  className={serviceSubTab === 'blotter' ? 'bg-red-700' : ''}
+                >
+                  <Shield className="mr-2 h-4 w-4" />
+                  Barangay Blotter
+                </Button>
+                <Button 
+                  variant={serviceSubTab === 'myrequests' ? 'default' : 'ghost'}
+                  onClick={() => setServiceSubTab('myrequests')}
+                  className={serviceSubTab === 'myrequests' ? 'bg-indigo-600' : ''}
+                >
+                  <Search className="mr-2 h-4 w-4" />
+                  My Requests
+                </Button>
+              </div>
+            </div>
+
+            {serviceSubTab === 'documents' ? (
+              <ServiceRequestForm onBack={() => setActiveTab('home')} residentUser={residentUser} />
+            ) : serviceSubTab === 'blotter' ? (
+              <BlotterForm onBack={() => setActiveTab('home')} />
+            ) : (
+              <MyRequests residentUser={residentUser} onBack={() => setActiveTab('home')} />
+            )}
           </TabsContent>
 
           {/* Report Issues Tab */}
           <TabsContent value="report">
-            <ReportForm />
+            <ReportForm onBack={() => setActiveTab('home')} residentUser={residentUser} />
           </TabsContent>
 
           {/* Community Map Tab */}
           <TabsContent value="map">
-            <CommunityMapWrapper />
+            <CommunityMapWrapper onBack={() => setActiveTab('home')} />
           </TabsContent>
 
           {/* Announcements Tab */}
           <TabsContent value="announcements">
-            <AnnouncementsBoard />
+            <AnnouncementsBoard onBack={() => setActiveTab('home')} />
           </TabsContent>
 
           {/* Feedback Tab */}
           <TabsContent value="feedback">
-            <FeedbackSystem />
+            <FeedbackSystem onBack={() => setActiveTab('home')} />
           </TabsContent>
 
           {/* Emergency Tab */}
           <TabsContent value="emergency">
-            <EmergencyContacts />
-          </TabsContent>
-
-          {/* My Requests Tab */}
-          <TabsContent value="myrequests">
-            <MyRequests />
+            <EmergencyContacts onBack={() => setActiveTab('home')} />
           </TabsContent>
         </Tabs>
+          </>
+        )}
       </main>
 
+      {/* Modals */}
+
+      <UserLogin
+        open={residentLoginOpen}
+        onOpenChange={setResidentLoginOpen}
+        onLoginSuccess={handleResidentLoginSuccess}
+        onRegisterClick={() => {
+          setResidentLoginOpen(false)
+          setResidentRegisterOpen(true)
+        }}
+      />
+
+      <UserRegistration
+        open={residentRegisterOpen}
+        onOpenChange={setResidentRegisterOpen}
+        onSuccess={() => {
+          setResidentRegisterOpen(false)
+          setResidentLoginOpen(true)
+        }}
+      />
+
       {/* Chatbot Widget */}
-      <ChatbotWidget />
+      <ChatbotWidget onNavigate={setActiveTab} />
 
       {/* Footer */}
       <footer className="bg-gray-800 text-white mt-16">
@@ -613,11 +851,7 @@ export default function UgnayanApp(): React.JSX.Element {
       </footer>
     </div>
       )}
-      <OfficialLogin 
-        open={loginOpen} 
-        onOpenChange={setLoginOpen}
-        onLoginSuccess={handleLoginSuccess}
-      />
+      {/* Official login modal removed */}
     </>
   )
 }

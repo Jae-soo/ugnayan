@@ -12,6 +12,8 @@ interface Message {
   text: string
   sender: 'user' | 'bot'
   timestamp: Date
+  linkTargetTab?: string
+  linkLabel?: string
 }
 
 interface QuickAction {
@@ -19,7 +21,11 @@ interface QuickAction {
   message: string
 }
 
-export default function ChatbotWidget(): React.JSX.Element {
+interface ChatbotWidgetProps {
+  onNavigate?: (tabId: string) => void
+}
+
+export default function ChatbotWidget({ onNavigate }: ChatbotWidgetProps): React.JSX.Element {
   const [isOpen, setIsOpen] = useState<boolean>(false)
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -121,8 +127,53 @@ export default function ChatbotWidget(): React.JSX.Element {
       return 'You\'re welcome! Is there anything else I can help you with today?'
     }
 
-    // Default response - keep conversation going
-    return `I understand you're asking about "${userMessage}". Let me help you with that!\n\nI can assist you with:\n• 📄 Document requests (clearances, certificates, permits)\n• 🚨 Reporting issues or emergencies\n• 🕐 Office hours and contact information\n• 📊 Tracking your requests\n• 📢 Community announcements\n• 🗺️ Using the map feature\n\nCould you please tell me more about what you need? For example, you can ask "How do I request a clearance?" or "What are your office hours?"`
+    // Default response for unrelated or random questions
+    return `I might not be able to help with "${userMessage}".\n\nI'm mainly focused on Barangay Irisan services, like:\n\n• 📄 Document requests (clearances, certificates, permits)\n• 🚨 Reporting issues or emergencies\n• 🕐 Office hours and contact information\n• 📊 Tracking your requests\n• 📢 Community announcements\n• 🗺️ Using the map feature\n\nPlease try asking something related to these services so I can assist you better.`
+  }
+
+  const getLinkTarget = (userMessage: string): { tab: string; label: string } | null => {
+    const lowerMessage = userMessage.toLowerCase()
+
+    if (lowerMessage.includes('clearance') || lowerMessage.includes('certificate') || lowerMessage.includes('document')) {
+      return { tab: 'services', label: 'Open Document Requests form' }
+    }
+
+    if (lowerMessage.includes('complaint') || lowerMessage.includes('report') || lowerMessage.includes('issue')) {
+      return { tab: 'report', label: 'Open Report and Emergency tab' }
+    }
+
+    if (lowerMessage.includes('emergency') || lowerMessage.includes('help')) {
+      return { tab: 'emergency', label: 'Open Emergency Contacts' }
+    }
+
+    if (lowerMessage.includes('map') || lowerMessage.includes('location')) {
+      return { tab: 'map', label: 'Open Community Map' }
+    }
+
+    if (lowerMessage.includes('track') || lowerMessage.includes('status')) {
+      return { tab: 'myrequests', label: 'Open My Requests' }
+    }
+
+    if (lowerMessage.includes('announcement') || lowerMessage.includes('news')) {
+      return { tab: 'announcements', label: 'Open Announcements' }
+    }
+
+    if (lowerMessage.includes('feedback') || lowerMessage.includes('review') || lowerMessage.includes('rating')) {
+      return { tab: 'feedback', label: 'Open Feedback form' }
+    }
+
+    if (
+      lowerMessage.includes('contact') ||
+      lowerMessage.includes('phone') ||
+      lowerMessage.includes('email') ||
+      lowerMessage.includes('hour') ||
+      lowerMessage.includes('time') ||
+      lowerMessage.includes('open')
+    ) {
+      return { tab: 'home', label: 'Go to Home information' }
+    }
+
+    return null
   }
 
   const getNextMessageId = (): string => {
@@ -147,13 +198,16 @@ export default function ChatbotWidget(): React.JSX.Element {
     setInputValue('')
     setIsTyping(true)
 
-    // Simulate bot typing delay
+    const linkTarget = getLinkTarget(messageText)
+
     setTimeout(() => {
       const botResponse: Message = {
         id: getNextMessageId(),
         text: getBotResponse(messageText),
         sender: 'bot',
-        timestamp: new Date()
+        timestamp: new Date(),
+        linkTargetTab: linkTarget ? linkTarget.tab : undefined,
+        linkLabel: linkTarget ? linkTarget.label : undefined
       }
       setMessages((prev: Message[]) => [...prev, botResponse])
       setIsTyping(false)
@@ -241,6 +295,16 @@ export default function ChatbotWidget(): React.JSX.Element {
                         }`}
                       >
                         <p className="text-sm whitespace-pre-wrap leading-relaxed">{message.text}</p>
+                        {message.sender === 'bot' && message.linkTargetTab && onNavigate && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => onNavigate(message.linkTargetTab as string)}
+                            className="mt-2 text-xs px-3 py-1 border-green-300 text-green-700 hover:bg-green-50"
+                          >
+                            {message.linkLabel || 'Open this section'}
+                          </Button>
+                        )}
                         <p
                           className={`text-xs mt-1.5 ${
                             message.sender === 'user' ? 'text-green-100' : 'text-gray-500'

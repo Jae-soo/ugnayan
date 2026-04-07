@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Identity } from '@clockworklabs/spacetimedb-sdk'
 import * as moduleBindings from '../index'
+import { safeSetItem } from './code/lib/storage'
 
 type DbConnection = moduleBindings.DbConnection
 type EventContext = moduleBindings.EventContext
@@ -210,7 +211,7 @@ export function useSpacetimeDB(): SpacetimeState & SpacetimeActions {
       connectionRef.current = connection
       setIdentity(id)
       setConnected(true)
-      localStorage.setItem('spacetime_token', token)
+      safeSetItem('spacetime_token', token)
       setStatusMessage(`Connected as ${id.toHexString().substring(0, 8)}...`)
       
       // Set up subscriptions and callbacks
@@ -230,7 +231,7 @@ export function useSpacetimeDB(): SpacetimeState & SpacetimeActions {
     moduleBindings.DbConnection.builder()
       .withUri(dbHost)
       .withModuleName(dbName)
-      .withToken(localStorage.getItem('spacetime_token') || '')
+      .withToken(typeof window !== 'undefined' ? localStorage.getItem('spacetime_token') || '' : '')
       .onConnect(onConnect)
       .onDisconnect(onDisconnect)
       .build()

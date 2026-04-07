@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { 
   Home, 
@@ -21,9 +20,9 @@ import {
   CloudRain,
   Mountain,
   LogIn,
+  UserCircle,
   LogOut,
-  LayoutDashboard,
-  UserCircle
+  TrendingUp
 } from 'lucide-react'
 import ServiceRequestForm from '@/components/ServiceRequestForm'
 import ReportForm from '@/components/ReportForm'
@@ -33,17 +32,193 @@ import FeedbackSystem from '@/display/FeedbackSystem'
 import EmergencyContacts from '@/display/EmergencyContacts'
 import MyRequests from '@/components/MyRequests'
 import RealTimeClock from '@/components/RealTimeClock'
-import OfficialLogin from '@/components/OfficialLogin'
 import ChatbotWidget from '@/components/ChatbotWidget'
-import AdminDashboard from '@/components/AdminDashboard'
 import UserRegistration from '@/components/UserRegistration'
 import UserLogin from '@/components/UserLogin'
 import UserProfile from '@/components/UserProfile'
 import { useSpacetimeDB } from '@/hooks/useSpacetime'
+import { useNotifications } from '@/hooks/useNotifications'
 import { sdk } from "@farcaster/miniapp-sdk"
 import { toast } from 'sonner'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import NotificationsBell from '@/components/NotificationsBell'
+import { useRouter } from 'next/navigation'
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer } from 'recharts'
+import type { ServiceRequest, Report } from '@/lib/types'
+import { getServiceRequests, getReports, getUserServiceRequests, getUserReports } from '@/lib/storage'
+
+function ResidentAnalytics(): React.JSX.Element {
+  const [serviceRequests, setServiceRequests] = React.useState<ServiceRequest[]>([])
+  const [reports, setReports] = React.useState<Report[]>([])
+  React.useEffect(() => {
+    let email: string | null = null
+    try {
+      const stored = localStorage.getItem('resident_user')
+      if (stored) {
+        const u = JSON.parse(stored) as { email?: string }
+        email = u?.email || null
+      }
+    } catch {}
+    if (email) {
+      setServiceRequests(getUserServiceRequests(email))
+      setReports(getUserReports(email))
+    } else {
+      setServiceRequests(getServiceRequests())
+      setReports(getReports())
+    }
+  }, [])
+  return (
+    <div className="space-y-6 mt-2 md:mt-4">
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">My Requests</CardTitle>
+            <FileText className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{serviceRequests.length}</div>
+            <p className="text-xs text-muted-foreground">
+              {serviceRequests.filter(r => r.status === 'completed' || r.status === 'ready').length} completed
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">My Reports</CardTitle>
+            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{reports.length}</div>
+            <p className="text-xs text-muted-foreground">
+              {reports.filter(r => r.status === 'resolved').length} resolved
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Open Items</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {serviceRequests.filter(r => r.status === 'pending' || r.status === 'in-progress').length + reports.filter(r => r.status === 'pending' || r.status === 'in-progress').length}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Request Status</CardTitle>
+          </CardHeader>
+          <CardContent className="h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={[
+                    { name: 'pending', value: serviceRequests.filter(r => r.status === 'pending').length },
+                    { name: 'in-progress', value: serviceRequests.filter(r => r.status === 'in-progress').length },
+                    { name: 'ready', value: serviceRequests.filter(r => r.status === 'ready').length },
+                    { name: 'completed', value: serviceRequests.filter(r => r.status === 'completed').length },
+                    { name: 'rejected', value: serviceRequests.filter(r => r.status === 'rejected').length },
+                  ]}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={80}
+                  paddingAngle={5}
+                  dataKey="value"
+                >
+                  {['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'].map((c, i) => (
+                    <Cell key={`cell-${i}`} fill={c} />
+                  ))}
+                </Pie>
+                <RechartsTooltip />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Report Status</CardTitle>
+          </CardHeader>
+          <CardContent className="h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={[
+                  { name: 'pending', value: reports.filter(r => r.status === 'pending').length },
+                  { name: 'in-progress', value: reports.filter(r => r.status === 'in-progress').length },
+                  { name: 'resolved', value: reports.filter(r => r.status === 'resolved').length },
+                  { name: 'rejected', value: reports.filter(r => r.status === 'rejected').length },
+                ]}
+                maxBarSize={50}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" />
+                <YAxis allowDecimals={false} />
+                <RechartsTooltip />
+                <Bar dataKey="value" fill="#00C49F" />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Request Types</CardTitle>
+          </CardHeader>
+          <CardContent className="h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={Object.entries(serviceRequests.reduce<Record<string, number>>((acc, r) => {
+                  const key = (r.documentType || 'unknown').toLowerCase()
+                  acc[key] = (acc[key] || 0) + 1
+                  return acc
+                }, {})).map(([name, value]) => ({ name, value }))}
+                maxBarSize={50}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" />
+                <YAxis allowDecimals={false} />
+                <RechartsTooltip />
+                <Bar dataKey="value" fill="#8884d8" />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Reports by Category</CardTitle>
+          </CardHeader>
+          <CardContent className="h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={Object.entries(reports.reduce<Record<string, number>>((acc, r) => {
+                  const key = (r.reportType || 'unknown').toLowerCase()
+                  acc[key] = (acc[key] || 0) + 1
+                  return acc
+                }, {})).map(([name, value]) => ({ name, value }))}
+                maxBarSize={50}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" />
+                <YAxis allowDecimals={false} />
+                <RechartsTooltip />
+                <Bar dataKey="value" fill="#FFBB28" />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  )
+}
 
 export default function UgnayanAppWithAuth(): React.JSX.Element {
+  const router = useRouter()
     useEffect(() => {
       const initializeFarcaster = async () => {
         try {
@@ -67,35 +242,14 @@ export default function UgnayanAppWithAuth(): React.JSX.Element {
       initializeFarcaster();
     }, [])
 
-  const { connected, userProfile, statusMessage } = useSpacetimeDB()
+  const { connected, userProfile, statusMessage, logoutUser } = useSpacetimeDB()
+  const { notifications, markAllRead, clearAll } = useNotifications()
   const [activeTab, setActiveTab] = useState<string>('home')
   const [loginOpen, setLoginOpen] = useState<boolean>(false)
-  const [officialLoginOpen, setOfficialLoginOpen] = useState<boolean>(false)
+  // Removed official login modal for residents
   const [registerOpen, setRegisterOpen] = useState<boolean>(false)
   const [profileOpen, setProfileOpen] = useState<boolean>(false)
-  const [loggedInOfficial, setLoggedInOfficial] = useState<{
-    username: string
-    role: string
-    name: string
-  } | null>(() => {
-    if (typeof window === 'undefined') {
-      return null
-    }
-    const stored = window.localStorage.getItem('official')
-    if (!stored) {
-      return null
-    }
-    try {
-      return JSON.parse(stored)
-    } catch (error) {
-      console.error('Failed to parse stored official:', error)
-      return null
-    }
-  })
-
-  const handleOfficialLoginSuccess = (official: { username: string; role: string; name: string }): void => {
-    setLoggedInOfficial(official)
-  }
+  // Official login/state removed from resident dashboard
 
   const handleUserLoginSuccess = (): void => {
     toast.success('Welcome back!')
@@ -105,12 +259,7 @@ export default function UgnayanAppWithAuth(): React.JSX.Element {
     toast.success('Registration successful! You are now logged in.')
   }
 
-  const handleOfficialLogout = (): void => {
-    localStorage.removeItem('official')
-    setLoggedInOfficial(null)
-    setActiveTab('home')
-    toast.success('Official logged out')
-  }
+  // Official logout removed from resident dashboard
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 via-blue-50 to-green-50">
@@ -119,39 +268,51 @@ export default function UgnayanAppWithAuth(): React.JSX.Element {
         <div className="container mx-auto px-4 py-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <div className="bg-white p-2 rounded-full">
-                <Shield className="h-8 w-8 text-green-600" />
-              </div>
+              <Shield className="h-8 w-8 text-white opacity-90" />
               <div>
                 <h1 className="text-3xl font-bold">Ugnayan</h1>
                 <p className="text-green-100 text-sm">Barangay Irisan Service Portal</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <Badge variant="secondary" className="bg-green-800 text-white px-4 py-2">
-                Baguio City
-              </Badge>
+              <span className="text-white/90 text-sm">Baguio City</span>
               <RealTimeClock />
+              <NotificationsBell
+                notifications={notifications}
+                onMarkAllRead={markAllRead}
+                onClearAll={clearAll}
+              />
               
               {/* Connection Status */}
               {!connected && (
-                <Badge variant="secondary" className="bg-yellow-600 text-white px-3 py-2">
-                  {statusMessage}
-                </Badge>
+                <span className="text-yellow-200 text-sm">{statusMessage}</span>
               )}
               
               {/* User Status */}
               {userProfile ? (
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="ghost"
-                    onClick={() => setProfileOpen(true)}
-                    className="text-white hover:bg-green-800"
-                  >
-                    <UserCircle className="h-5 w-5 mr-2" />
-                    {userProfile.fullName}
-                  </Button>
-                </div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger className="flex items-center gap-2 focus:outline-none">
+                    <Avatar className="h-8 w-8">
+                      <AvatarFallback>{(userProfile.fullName?.[0] || userProfile.username?.[0] || 'U').toUpperCase()}</AvatarFallback>
+                    </Avatar>
+                    <span className="text-sm text-white">{userProfile.fullName}</span>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => setProfileOpen(true)}>
+                      <UserCircle className="h-4 w-4 mr-2" />
+                      View Profile
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => {
+                      try { localStorage.removeItem('resident_user') } catch {}
+                      logoutUser()
+                      toast.success('Logged out successfully')
+                      try { router.replace('/login') } catch {}
+                    }}>
+                      <LogOut className="h-4 w-4 mr-2" />
+                      Logout
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               ) : (
                 <Button
                   variant="secondary"
@@ -164,32 +325,7 @@ export default function UgnayanAppWithAuth(): React.JSX.Element {
                 </Button>
               )}
               
-              {/* Official Login */}
-              {loggedInOfficial ? (
-                <div className="flex items-center gap-2">
-                  <Badge variant="secondary" className="bg-white text-green-700 px-3 py-2">
-                    {loggedInOfficial.role}
-                  </Badge>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={handleOfficialLogout}
-                    className="text-white hover:bg-green-800"
-                    title="Official Logout"
-                  >
-                    <LogOut className="h-5 w-5" />
-                  </Button>
-                </div>
-              ) : (
-                <Button
-                  variant="outline"
-                  onClick={() => setOfficialLoginOpen(true)}
-                  className="bg-transparent border-white text-white hover:bg-green-800"
-                >
-                  <Shield className="h-4 w-4 mr-2" />
-                  Official
-                </Button>
-              )}
+              {/* Official login removed from resident dashboard */}
             </div>
           </div>
         </div>
@@ -199,7 +335,7 @@ export default function UgnayanAppWithAuth(): React.JSX.Element {
       <main className="container mx-auto px-4 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           {/* Navigation Tabs */}
-          <TabsList className={`grid gap-2 bg-white p-2 shadow-md h-auto ${loggedInOfficial ? 'grid-cols-4 lg:grid-cols-9' : 'grid-cols-4 lg:grid-cols-8'}`}>
+          <TabsList className={`grid gap-2 bg-white p-2 shadow-md h-auto grid-cols-4 lg:grid-cols-9`}>
             <TabsTrigger value="home" className="flex flex-col items-center gap-1 py-3">
               <Home className="h-5 w-5" />
               <span className="text-xs">Home</span>
@@ -232,12 +368,11 @@ export default function UgnayanAppWithAuth(): React.JSX.Element {
               <Users className="h-5 w-5" />
               <span className="text-xs">My Requests</span>
             </TabsTrigger>
-            {loggedInOfficial && (
-              <TabsTrigger value="admin" className="flex flex-col items-center gap-1 py-3 bg-green-50">
-                <LayoutDashboard className="h-5 w-5" />
-                <span className="text-xs">Admin</span>
-              </TabsTrigger>
-            )}
+            <TabsTrigger value="analytics" className="flex flex-col items-center gap-1 py-3">
+              <TrendingUp className="h-5 w-5" />
+              <span className="text-xs">Analytics</span>
+            </TabsTrigger>
+            {/* Admin tab removed from resident dashboard */}
           </TabsList>
 
           {/* Home Tab */}
@@ -440,22 +575,15 @@ export default function UgnayanAppWithAuth(): React.JSX.Element {
           <TabsContent value="feedback"><FeedbackSystem /></TabsContent>
           <TabsContent value="emergency"><EmergencyContacts /></TabsContent>
           <TabsContent value="myrequests"><MyRequests /></TabsContent>
+          <TabsContent value="analytics">
+            <ResidentAnalytics />
+          </TabsContent>
 
-          {/* Admin Dashboard */}
-          {loggedInOfficial && (
-            <TabsContent value="admin">
-              <AdminDashboard officialInfo={loggedInOfficial} />
-            </TabsContent>
-          )}
+          {/* Admin dashboard removed from resident dashboard */}
         </Tabs>
       </main>
 
       {/* Modals */}
-      <OfficialLogin 
-        open={officialLoginOpen} 
-        onOpenChange={setOfficialLoginOpen}
-        onLoginSuccess={handleOfficialLoginSuccess}
-      />
       
       <UserLogin
         open={loginOpen}

@@ -10,20 +10,52 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner'
 import { saveReport, setSyncMapEntry } from '@/lib/storage'
 import type { Report as LocalReport } from '@/lib/types'
-import { AlertTriangle, Send } from 'lucide-react'
+import { AlertTriangle, Send, ArrowLeft, Upload, X, ImageIcon } from 'lucide-react'
 
-export default function ReportForm(): React.JSX.Element {
+export default function ReportForm({ onBack, residentUser }: { onBack?: () => void; residentUser?: any }): React.JSX.Element {
   const [formData, setFormData] = useState({
-    fullName: '',
-    email: '',
-    phone: '',
+    fullName: residentUser?.fullName || '',
+    email: residentUser?.email || '',
+    phone: residentUser?.phone || '',
     location: '',
     reportType: '',
     priority: 'medium',
-    description: ''
+    description: '',
+    idPicture: ''
   })
 
+  // Auto-fill if user logs in
+  React.useEffect(() => {
+    if (residentUser) {
+      setFormData(prev => ({
+        ...prev,
+        fullName: prev.fullName || residentUser.fullName || '',
+        email: prev.email || residentUser.email || '',
+        phone: prev.phone || residentUser.phone || ''
+      }))
+    }
+  }, [residentUser])
+
+  const [idPreview, setIdPreview] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false)
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('File size must be less than 5MB')
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      const base64String = reader.result as string
+      setFormData(prev => ({ ...prev, idPicture: base64String }))
+      setIdPreview(base64String)
+    }
+    reader.readAsDataURL(file)
+  }
 
   const handleInputChange = (field: string, value: string): void => {
     setFormData(prev => ({ ...prev, [field]: value }))
@@ -33,17 +65,25 @@ export default function ReportForm(): React.JSX.Element {
     e.preventDefault()
     setIsSubmitting(true)
 
-    if (!formData.fullName || !formData.email || !formData.reportType || !formData.description) {
+    if (!formData.fullName || !formData.reportType || !formData.description) {
       toast.error('Please fill in all required fields')
       setIsSubmitting(false)
       return
     }
 
-    const emailOk = /^[A-Za-z0-9._%+-]+@gmail\.com$/i.test(formData.email)
-    if (!emailOk) {
-      toast.error('Please use a valid Gmail address')
+    if (!formData.idPicture) {
+      toast.error('Verification picture is required to prevent troll reports')
       setIsSubmitting(false)
       return
+    }
+
+    if (formData.email) {
+      const emailOk = /^[A-Za-z0-9._%+-]+@gmail\.com$/i.test(formData.email)
+      if (!emailOk) {
+        toast.error('Please use a valid Gmail address')
+        setIsSubmitting(false)
+        return
+      }
     }
     if (formData.phone) {
       const digits = formData.phone.replace(/\D/g, '')
@@ -82,6 +122,7 @@ export default function ReportForm(): React.JSX.Element {
         description: formData.description,
         status: 'pending',
         submittedAt: new Date().toISOString(),
+        idPicture: formData.idPicture
       }
       saveReport(localReport)
       try { window.dispatchEvent(new Event('barangay_reports_updated')) } catch {}
@@ -101,7 +142,8 @@ export default function ReportForm(): React.JSX.Element {
             reporterName: formData.fullName,
             reporterEmail: formData.email,
             reporterPhone: formData.phone,
-            priority: formData.priority
+            priority: formData.priority,
+            idPicture: formData.idPicture
           }),
         })
         if (response.ok) {
@@ -139,7 +181,18 @@ export default function ReportForm(): React.JSX.Element {
   }
 
   return (
-    <Card className="shadow-lg">
+    <div className="space-y-6">
+      {onBack && (
+        <Button 
+          variant="ghost" 
+          onClick={onBack}
+          className="flex items-center gap-2 text-gray-600 hover:text-orange-600"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to Dashboard
+        </Button>
+      )}
+      <Card className="shadow-lg">
       <CardHeader className="bg-gradient-to-r from-orange-600 to-red-600 text-white">
         <CardTitle className="flex items-center gap-2 text-2xl">
           <AlertTriangle className="h-6 w-6" />
@@ -170,7 +223,7 @@ export default function ReportForm(): React.JSX.Element {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="reporterEmail">Email Address *</Label>
+                <Label htmlFor="reporterEmail">Email Address (Optional)</Label>
                 <Input
                   id="reporterEmail"
                   type="email"
@@ -178,7 +231,6 @@ export default function ReportForm(): React.JSX.Element {
                   value={formData.email}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange('email', e.target.value)}
                   disabled={isSubmitting}
-                  required
                 />
               </div>
             </div>
@@ -293,6 +345,61 @@ export default function ReportForm(): React.JSX.Element {
             </ul>
           </div>
 
+          {/* ID Verification Section */}
+          <div className="space-y-4">
+            <h3 className="font-semibold text-lg border-b pb-2 flex items-center gap-2">
+              <ImageIcon className="h-5 w-5 text-orange-600" />
+              ID Verification *
+            </h3>
+            
+            <div className="bg-orange-50/50 p-6 rounded-xl border-2 border-dashed border-orange-200">
+              <div className="flex flex-col items-center justify-center text-center space-y-4">
+                {idPreview ? (
+                  <div className="relative w-full max-sm">
+                    <img src={idPreview} alt="ID Preview" className="rounded-lg shadow-md border-2 border-white" />
+                    <Button 
+                      type="button" 
+                      variant="destructive" 
+                      size="sm" 
+                      className="absolute -top-2 -right-2 rounded-full h-8 w-8 p-0"
+                      onClick={() => {
+                        setIdPreview(null)
+                        handleInputChange('idPicture', '')
+                      }}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="p-4 bg-orange-100 rounded-full">
+                      <Upload className="h-10 w-10 text-orange-600" />
+                    </div>
+                    <div>
+                      <p className="text-orange-900 font-bold">Upload a Valid ID</p>
+                      <p className="text-sm text-orange-700">Required to prevent troll reports. PNG, JPG up to 5MB.</p>
+                    </div>
+                    <Input 
+                      type="file" 
+                      accept="image/*" 
+                      className="hidden" 
+                      id="id-upload" 
+                      onChange={handleFileChange}
+                    />
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      className="border-orange-300 hover:bg-orange-100"
+                      onClick={() => document.getElementById('id-upload')?.click()}
+                    >
+                      Choose Image
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+
           {/* Submit Button */}
           <Button 
             type="submit" 
@@ -303,11 +410,21 @@ export default function ReportForm(): React.JSX.Element {
             }`}
             disabled={isSubmitting}
           >
-            <Send className="mr-2 h-5 w-5" />
-            {isSubmitting ? 'Submitting...' : 'Submit Report'}
+            {isSubmitting ? (
+              <div className="flex items-center gap-2">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                Submitting...
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <Send className="h-5 w-5" />
+                Submit Report
+              </div>
+            )}
           </Button>
         </form>
       </CardContent>
     </Card>
+    </div>
   )
 }

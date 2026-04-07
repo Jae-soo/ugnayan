@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Identity } from '@clockworklabs/spacetimedb-sdk'
 import * as moduleBindings from '../../index'
+import { safeSetItem } from '@/lib/storage'
 
 type DbConnection = moduleBindings.DbConnection
 type EventContext = moduleBindings.EventContext
@@ -21,6 +22,14 @@ export interface SpacetimeState {
   serviceRequests: ServiceRequest[]
   reports: Report[]
   announcements: Announcement[]
+  notifications: Array<{
+    id: string
+    type: 'ServiceRequest' | 'Report'
+    entityId: string
+    message: string
+    createdAt: number
+    read: boolean
+  }>
 }
 
 export interface SpacetimeActions {
@@ -33,6 +42,7 @@ export interface SpacetimeActions {
     address: string
   ) => void
   loginUser: (username: string, password: string) => void
+  logoutUser: () => void
   createServiceRequest: (
     fullName: string,
     email: string,
@@ -55,9 +65,20 @@ export interface SpacetimeActions {
   queryMyServiceRequests: () => void
   queryMyReports: () => void
   queryAllAnnouncements: () => void
+  markAllNotificationsRead: () => void
+  clearNotifications: () => void
 }
 
 export function useSpacetimeDB(): SpacetimeState & SpacetimeActions {
+  type NotificationItem = {
+    id: string
+    type: 'ServiceRequest' | 'Report'
+    entityId: string
+    message: string
+    createdAt: number
+    read: boolean
+  }
+
   const [connected, setConnected] = useState(false)
   const [identity, setIdentity] = useState<Identity | null>(null)
   const [statusMessage, setStatusMessage] = useState('Connecting to database...')
@@ -65,8 +86,49 @@ export function useSpacetimeDB(): SpacetimeState & SpacetimeActions {
   const [serviceRequests, setServiceRequests] = useState<ServiceRequest[]>([])
   const [reports, setReports] = useState<Report[]>([])
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
+  const [notifications, setNotifications] = useState<NotificationItem[]>([])
   
   const connectionRef = useRef<DbConnection | null>(null)
+  const isActiveRef = useRef<boolean>(true)
+  const subscriptionRef = useRef<any>(null)
+
+  const notificationsKey = (): string => {
+    const idHex = identity ? identity.toHexString() : 'anonymous'
+    return `notifications:${idHex}`
+  }
+
+  const persistNotifications = (items: NotificationItem[]): void => {
+    try { safeSetItem(notificationsKey(), JSON.stringify(items)) } catch {}
+  }
+
+  const addNotification = (item: Omit<NotificationItem, 'id' | 'createdAt' | 'read'> & { message: string }): void => {
+    const newItem: NotificationItem = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      type: item.type,
+      entityId: item.entityId,
+      message: item.message,
+      createdAt: Date.now(),
+      read: false
+    }
+    setNotifications(prev => {
+      const next = [newItem, ...prev].slice(0, 100)
+      persistNotifications(next)
+      return next
+    })
+  }
+
+  const markAllNotificationsRead = (): void => {
+    setNotifications(prev => {
+      const next = prev.map(n => ({ ...n, read: true }))
+      persistNotifications(next)
+      return next
+    })
+  }
+
+  const clearNotifications = (): void => {
+    setNotifications([])
+    persistNotifications([])
+  }
 
   // Subscribe to tables
   const subscribeToTables = useCallback(() => {
@@ -93,6 +155,12 @@ export function useSpacetimeDB(): SpacetimeState & SpacetimeActions {
         setStatusMessage(`Subscription error: ${error.message}`)
       })
       .subscribe(queries)
+    try {
+      // Store subscription handle if SDK returns one
+      const builder: any = connectionRef.current.subscriptionBuilder()
+      const handle = builder.onApplied(() => {}).onError(() => {}).subscribe(queries)
+      subscriptionRef.current = handle || null
+    } catch {}
   }, [])
 
   // Process initial cache data
@@ -128,6 +196,11 @@ export function useSpacetimeDB(): SpacetimeState & SpacetimeActions {
         setUserProfile(profile)
       }
     }
+    try {
+      const raw = localStorage.getItem(notificationsKey())
+      const parsed: NotificationItem[] = raw ? JSON.parse(raw) : []
+      setNotifications(parsed)
+    } catch {}
   }, [identity])
 
   // Register table callbacks for live updates
@@ -138,6 +211,7 @@ export function useSpacetimeDB(): SpacetimeState & SpacetimeActions {
 
     // User profiles
     connectionRef.current.db.userProfiles.onInsert((_ctx: EventContext | undefined, profile: UserProfile) => {
+      if (!isActiveRef.current) return
       if (profile.identity.toHexString() === currentIdentity.toHexString()) {
         setUserProfile(profile)
         console.log('User profile loaded:', profile.username)
@@ -145,6 +219,7 @@ export function useSpacetimeDB(): SpacetimeState & SpacetimeActions {
     })
 
     connectionRef.current.db.userProfiles.onUpdate((_ctx: EventContext | undefined, _old: UserProfile, profile: UserProfile) => {
+      if (!isActiveRef.current) return
       if (profile.identity.toHexString() === currentIdentity.toHexString()) {
         setUserProfile(profile)
         console.log('User profile updated')
@@ -153,41 +228,70 @@ export function useSpacetimeDB(): SpacetimeState & SpacetimeActions {
 
     // Service requests
     connectionRef.current.db.serviceRequests.onInsert((_ctx: EventContext | undefined, req: ServiceRequest) => {
+      if (!isActiveRef.current) return
       setServiceRequests(prev => [...prev, req])
     })
 
-    connectionRef.current.db.serviceRequests.onUpdate((_ctx: EventContext | undefined, _old: ServiceRequest, req: ServiceRequest) => {
+    connectionRef.current.db.serviceRequests.onUpdate((_ctx: EventContext | undefined, old: ServiceRequest, req: ServiceRequest) => {
+      if (!isActiveRef.current) return
       setServiceRequests(prev => prev.map(r => r.requestId === req.requestId ? req : r))
+      const mine = req.userIdentity.toHexString() === currentIdentity.toHexString()
+      const changed = old.status !== req.status
+      if (mine && changed) {
+        const statusText = (moduleBindings as any).ServiceRequestStatus[req.status]
+        addNotification({
+          type: 'ServiceRequest',
+          entityId: String(req.requestId),
+          message: `Service request ${String(req.requestId)} updated to ${statusText}`
+        })
+      }
     })
 
     connectionRef.current.db.serviceRequests.onDelete((_ctx: EventContext, req: ServiceRequest) => {
+      if (!isActiveRef.current) return
       setServiceRequests(prev => prev.filter(r => r.requestId !== req.requestId))
     })
 
     // Reports
     connectionRef.current.db.reports.onInsert((_ctx: EventContext | undefined, rep: Report) => {
+      if (!isActiveRef.current) return
       setReports(prev => [...prev, rep])
     })
 
-    connectionRef.current.db.reports.onUpdate((_ctx: EventContext | undefined, _old: Report, rep: Report) => {
+    connectionRef.current.db.reports.onUpdate((_ctx: EventContext | undefined, old: Report, rep: Report) => {
+      if (!isActiveRef.current) return
       setReports(prev => prev.map(r => r.reportId === rep.reportId ? rep : r))
+      const mine = rep.userIdentity.toHexString() === currentIdentity.toHexString()
+      const changed = old.status !== rep.status
+      if (mine && changed) {
+        const statusText = (moduleBindings as any).ReportStatus[rep.status]
+        addNotification({
+          type: 'Report',
+          entityId: String(rep.reportId),
+          message: `Report ${String(rep.reportId)} updated to ${statusText}`
+        })
+      }
     })
 
     connectionRef.current.db.reports.onDelete((_ctx: EventContext, rep: Report) => {
+      if (!isActiveRef.current) return
       setReports(prev => prev.filter(r => r.reportId !== rep.reportId))
     })
 
     // Announcements
     connectionRef.current.db.announcements.onInsert((_ctx: EventContext | undefined, ann: Announcement) => {
+      if (!isActiveRef.current) return
       setAnnouncements(prev => [...prev, ann])
     })
 
     connectionRef.current.db.announcements.onDelete((_ctx: EventContext, ann: Announcement) => {
+      if (!isActiveRef.current) return
       setAnnouncements(prev => prev.filter(a => a.announcementId !== ann.announcementId))
     })
 
     // Auth events - listen for login responses
     connectionRef.current.db.authEvents.onInsert((_ctx: EventContext | undefined, authEvent: AuthEvent) => {
+      if (!isActiveRef.current) return
       if (authEvent.identity.toHexString() === currentIdentity.toHexString()) {
         console.log('Auth event:', authEvent.message)
         setStatusMessage(authEvent.message)
@@ -197,6 +301,7 @@ export function useSpacetimeDB(): SpacetimeState & SpacetimeActions {
 
   // Initialize connection
   useEffect(() => {
+    isActiveRef.current = true
     if (connectionRef.current) {
       console.log('Connection already established')
       return
@@ -210,7 +315,7 @@ export function useSpacetimeDB(): SpacetimeState & SpacetimeActions {
       connectionRef.current = connection
       setIdentity(id)
       setConnected(true)
-      localStorage.setItem('spacetime_token', token)
+      safeSetItem('spacetime_token', token)
       setStatusMessage(`Connected as ${id.toHexString().substring(0, 8)}...`)
       
       // Set up subscriptions and callbacks
@@ -234,7 +339,44 @@ export function useSpacetimeDB(): SpacetimeState & SpacetimeActions {
       .onConnect(onConnect)
       .onDisconnect(onDisconnect)
       .build()
+    return () => {
+      isActiveRef.current = false
+      try {
+        if (subscriptionRef.current && typeof subscriptionRef.current.unsubscribe === 'function') {
+          subscriptionRef.current.unsubscribe()
+        }
+      } catch {}
+      connectionRef.current = null
+      setIdentity(null)
+      setConnected(false)
+      setUserProfile(null)
+      setServiceRequests([])
+      setReports([])
+      setAnnouncements([])
+    }
   }, [subscribeToTables, registerTableCallbacks])
+
+  const logoutUser = useCallback(() => {
+    isActiveRef.current = false
+    try { localStorage.removeItem('spacetime_token') } catch {}
+    try { if (subscriptionRef.current && typeof subscriptionRef.current.unsubscribe === 'function') { subscriptionRef.current.unsubscribe() } } catch {}
+    try {
+      const conn: any = connectionRef.current
+      if (conn && typeof conn.disconnect === 'function') {
+        conn.disconnect()
+      } else if (conn && typeof conn.close === 'function') {
+        conn.close()
+      }
+    } catch {}
+    connectionRef.current = null
+    setIdentity(null)
+    setConnected(false)
+    setStatusMessage('Disconnected')
+    setUserProfile(null)
+    setServiceRequests([])
+    setReports([])
+    setAnnouncements([])
+  }, [])
 
   // Reducer actions
   const registerUser = useCallback((
@@ -336,8 +478,10 @@ export function useSpacetimeDB(): SpacetimeState & SpacetimeActions {
     serviceRequests,
     reports,
     announcements,
+    notifications,
     registerUser,
     loginUser,
+    logoutUser,
     createServiceRequest,
     createReport,
     submitFeedback,
@@ -345,5 +489,7 @@ export function useSpacetimeDB(): SpacetimeState & SpacetimeActions {
     queryMyServiceRequests,
     queryMyReports,
     queryAllAnnouncements,
+    markAllNotificationsRead,
+    clearNotifications,
   }
 }

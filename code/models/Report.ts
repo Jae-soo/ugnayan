@@ -60,6 +60,10 @@ const ReportSchema: Schema = new Schema(
       type: String,
       required: false,
     },
+    idPicture: {
+      type: String,
+      required: false,
+    },
   },
   {
     timestamps: true,

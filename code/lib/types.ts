@@ -20,7 +20,7 @@ export interface DocumentRequest {
   submittedAt: string;
 }
 
-export interface ServiceRequest {
+export interface LocalServiceRequest {
   referenceId: string;
   fullName: string;
   email: string;
@@ -28,9 +28,10 @@ export interface ServiceRequest {
   address: string;
   documentType: string;
   purpose: string;
+  additionalInfo?: string;
   status: 'pending' | 'in-progress' | 'ready' | 'completed' | 'rejected';
   submittedAt: string;
-  additionalInfo?: string;
+  idPicture?: string; // Base64 or URL
 }
 
 export interface Report {
@@ -44,6 +45,28 @@ export interface Report {
   description: string;
   status: 'pending' | 'in-progress' | 'resolved' | 'rejected';
   submittedAt: string;
+}
+
+export interface Blotter {
+  referenceId: string;
+  entryNo: string;
+  dateReported: string;
+  timeReported: string;
+  placeOfIncident: string;
+  incidentType: string;
+  complainantName: string;
+  complainantAddress: string;
+  complainantAge: string;
+  complainantSex: string;
+  complainantContact: string;
+  respondentName: string;
+  respondentAddress: string;
+  respondentAge: string;
+  respondentSex: string;
+  respondentRelationship: string;
+  status: 'pending' | 'in-progress' | 'scheduled' | 'settled' | 'dismissed';
+  submittedAt: string;
+  idPicture?: string; // Base64 or URL
 }
 
 export interface Reply {

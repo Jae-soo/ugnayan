@@ -8,22 +8,88 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
-import { saveServiceRequest, setSyncMapEntry } from '@/lib/storage'
-import type { ServiceRequest as LocalServiceRequest } from '@/lib/types'
-import { FileText, Send } from 'lucide-react'
+import { saveServiceRequest } from '@/lib/storage'
+import type { LocalServiceRequest } from '@/lib/types'
+import { FileText, Send, CheckCircle2, ShieldCheck, ChevronRight, ArrowLeft, Upload, Image as ImageIcon, X, MapPin } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
-export default function ServiceRequestForm(): React.JSX.Element {
+const DOCUMENT_TYPES = [
+  { id: 'barangay-clearance', name: 'Barangay Clearance', icon: <FileText className="h-10 w-10 text-blue-600" />, description: 'Required for job applications, ID applications, and other legal purposes.' },
+  { id: 'certificate-of-residency', name: 'Certificate of Residency', icon: <MapPin className="h-10 w-10 text-green-600" />, description: 'Proof that you are a resident of Barangay Irisan.' },
+  { id: 'certificate-of-indigency', name: 'Certificate of Indigency', icon: <ShieldCheck className="h-10 w-10 text-orange-600" />, description: 'For scholarship, medical assistance, or social service requirements.' },
+  { id: 'business-permit', name: 'Business Permit', icon: <ImageIcon className="h-10 w-10 text-purple-600" />, description: 'Clearance to operate a business within the barangay.' },
+  { id: 'certificate-of-good-moral', name: 'Certificate of Good Moral', icon: <CheckCircle2 className="h-10 w-10 text-indigo-600" />, description: 'Often required for school or employment.' },
+  { id: 'barangay-id', name: 'Barangay ID', icon: <ImageIcon className="h-10 w-10 text-red-600" />, description: 'Official identification card issued by the barangay.' },
+  { id: 'other', name: 'Other Document', icon: <FileText className="h-10 w-10 text-gray-600" />, description: 'Any other specialized barangay documents.' },
+]
+
+export default function ServiceRequestForm({ onBack, residentUser }: { onBack?: () => void; residentUser?: any }): React.JSX.Element {
+  const [step, setStep] = useState<'selection' | 'form'>('selection')
+  const [showTerms, setShowTerms] = useState(false)
+  const [selectedDoc, setSelectedDoc] = useState<string | null>(null)
+  const [idPreview, setIdPreview] = useState<string | null>(null)
+  
   const [formData, setFormData] = useState({
-    fullName: '',
-    email: '',
-    phone: '',
-    address: '',
+    fullName: residentUser?.fullName || '',
+    phone: residentUser?.phone || '',
+    address: residentUser?.address || '',
     documentType: '',
     purpose: '',
-    additionalInfo: ''
+    additionalInfo: '',
+    idPicture: ''
   })
 
+  // Update form if residentUser changes (e.g. logs in while on page)
+  React.useEffect(() => {
+    if (residentUser) {
+      setFormData(prev => ({
+        ...prev,
+        fullName: prev.fullName || residentUser.fullName || '',
+        phone: prev.phone || residentUser.phone || '',
+        address: prev.address || residentUser.address || ''
+      }))
+    }
+  }, [residentUser])
+
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false)
+
+  const handleDocSelect = (docId: string) => {
+    setSelectedDoc(docId)
+    setShowTerms(true)
+  }
+
+  const handleAcceptTerms = () => {
+    if (selectedDoc) {
+      handleInputChange('documentType', selectedDoc)
+      setShowTerms(false)
+      setStep('form')
+    }
+  }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error('File size must be less than 5MB')
+        return
+      }
+      
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        const base64String = reader.result as string
+        setIdPreview(base64String)
+        handleInputChange('idPicture', base64String)
+      }
+      reader.readAsDataURL(file)
+    }
+  }
 
   const handleInputChange = (field: string, value: string): void => {
     setFormData(prev => ({ ...prev, [field]: value }))
@@ -33,18 +99,18 @@ export default function ServiceRequestForm(): React.JSX.Element {
     e.preventDefault()
     setIsSubmitting(true)
 
-    if (!formData.fullName || !formData.email || !formData.phone || !formData.documentType || !formData.purpose) {
+    if (!formData.fullName || !formData.phone || !formData.address || !formData.documentType || !formData.purpose) {
       toast.error('Please fill in all required fields')
       setIsSubmitting(false)
       return
     }
 
-    const emailOk = /^[A-Za-z0-9._%+-]+@gmail\.com$/i.test(formData.email)
-    if (!emailOk) {
-      toast.error('Please use a valid Gmail address')
+    if (!formData.idPicture) {
+      toast.error('Valid ID picture is required to prevent troll requests')
       setIsSubmitting(false)
       return
     }
+
     const digits = formData.phone.replace(/\D/g, '')
     if (digits.length !== 11) {
       toast.error('Phone number must be exactly 11 digits')
@@ -59,7 +125,7 @@ export default function ServiceRequestForm(): React.JSX.Element {
       const localReq: LocalServiceRequest = {
         referenceId,
         fullName: formData.fullName,
-        email: formData.email,
+        email: residentUser?.email || '', 
         phone: formData.phone,
         address: formData.address,
         documentType: formData.documentType,
@@ -67,6 +133,7 @@ export default function ServiceRequestForm(): React.JSX.Element {
         status: 'pending',
         submittedAt: new Date().toISOString(),
         additionalInfo: formData.additionalInfo || undefined,
+        idPicture: formData.idPicture
       }
       saveServiceRequest(localReq)
       try { window.dispatchEvent(new Event('barangay_service_requests_updated')) } catch {}
@@ -79,42 +146,46 @@ export default function ServiceRequestForm(): React.JSX.Element {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            type: 'service',
-            description: formData.additionalInfo || formData.purpose,
+            type: 'document',
+            description: formData.purpose,
             residentName: formData.fullName,
-            residentEmail: formData.email,
+            residentEmail: residentUser?.email || '', 
             residentPhone: formData.phone,
             residentAddress: formData.address,
             documentType: formData.documentType,
             purpose: formData.purpose,
-            additionalInfo: formData.additionalInfo
+            additionalInfo: formData.additionalInfo,
+            idPicture: formData.idPicture
           }),
         })
         if (response.ok) {
           const data = await response.json()
           apiReferenceId = data.request?._id as string | undefined
-          if (apiReferenceId) {
-            try { setSyncMapEntry(referenceId, 'service', apiReferenceId) } catch {}
-          }
         }
-      } catch {}
+      } catch (err) {
+        console.error('API submission failed:', err)
+      }
 
       toast.success('Service request submitted!', {
-        description: apiReferenceId
-          ? `Reference ID: ${apiReferenceId}`
-          : 'Saved locally. You will receive updates.'
+        description: apiReferenceId 
+          ? `Reference ID: ${apiReferenceId}. Our officials will verify your ID and process your request.`
+          : `Reference ID: ${referenceId}. Saved locally. Officials will review your request.`,
+        duration: 8000
       })
 
-      // Reset form
+      // Reset form and go back to selection
       setFormData({
         fullName: '',
-        email: '',
         phone: '',
         address: '',
         documentType: '',
         purpose: '',
-        additionalInfo: ''
+        additionalInfo: '',
+        idPicture: ''
       })
+      setIdPreview(null)
+      setStep('selection')
+      setSelectedDoc(null)
     } catch (error) {
       console.error('Error submitting request:', error)
       toast.error('Failed to submit request. Please try again.')
@@ -123,151 +194,280 @@ export default function ServiceRequestForm(): React.JSX.Element {
     }
   }
 
+  if (step === 'selection') {
+    return (
+      <div className="space-y-6">
+        {onBack && (
+          <Button 
+            variant="ghost" 
+            onClick={onBack}
+            className="flex items-center gap-2 text-gray-600 hover:text-blue-600"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to Dashboard
+          </Button>
+        )}
+        <Card className="shadow-lg border-blue-100 overflow-hidden">
+          <CardHeader className="bg-gradient-to-r from-blue-600 to-blue-700 text-white text-center py-8">
+            <CardTitle className="text-3xl font-bold flex items-center justify-center gap-3">
+              <FileText className="h-8 w-8" />
+              Document Selection
+            </CardTitle>
+            <CardDescription className="text-blue-100 text-lg mt-2">
+              Select the document you wish to request from Barangay Irisan
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {DOCUMENT_TYPES.map((doc) => (
+                <Card 
+                  key={doc.id} 
+                  className="cursor-pointer hover:shadow-xl transition-all hover:scale-[1.03] border-2 hover:border-blue-400 group relative overflow-hidden"
+                  onClick={() => handleDocSelect(doc.id)}
+                >
+                  <CardHeader className="pb-2">
+                    <div className="mb-3 group-hover:scale-110 transition-transform">
+                      {doc.icon}
+                    </div>
+                    <CardTitle className="text-xl group-hover:text-blue-600 transition-colors">{doc.name}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-gray-600 line-clamp-2">{doc.description}</p>
+                    <div className="mt-4 flex items-center text-blue-600 font-semibold text-sm">
+                      Request Now <ChevronRight className="h-4 w-4 ml-1 group-hover:translate-x-1 transition-transform" />
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Dialog open={showTerms} onOpenChange={setShowTerms}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-2xl text-blue-700">
+                <ShieldCheck className="h-6 w-6" />
+                Terms and Conditions
+              </DialogTitle>
+              <DialogDescription className="text-lg">
+                Please review and accept before proceeding with your request.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="max-h-[60vh] overflow-y-auto p-4 bg-gray-50 rounded-lg space-y-4 text-sm text-gray-700">
+              <p className="font-bold text-gray-900">1. Data Privacy Act Compliance</p>
+              <p>I hereby authorize Barangay Irisan to collect and process my personal data for the purpose of my document request in accordance with the Data Privacy Act of 2012.</p>
+              
+              <p className="font-bold text-gray-900">2. Accuracy of Information</p>
+              <p>I certify that all information provided in this request is true, accurate, and complete. Any false information may lead to the rejection of my request or legal consequences.</p>
+              
+              <p className="font-bold text-gray-900">3. Residency Requirement</p>
+              <p>I understand that most document requests are only available to bona fide residents of Barangay Irisan, Baguio City.</p>
+              
+              <p className="font-bold text-gray-900">4. Processing & Fees</p>
+              <p>I acknowledge that processing may take 1-3 business days and that certain documents may require payment of corresponding fees at the Barangay Hall.</p>
+              
+              <p className="font-bold text-gray-900">5. Claiming Policy</p>
+              <p>I agree to present a valid government-issued ID upon claiming the document. Documents not claimed within 30 days will be disposed of.</p>
+            </div>
+            <DialogFooter className="flex gap-2 sm:gap-0">
+              <Button variant="ghost" onClick={() => setShowTerms(false)}>Cancel</Button>
+              <Button className="bg-blue-600 hover:bg-blue-700" onClick={handleAcceptTerms}>
+                I Accept & Continue
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+    )
+  }
+
   return (
-    <Card className="shadow-lg">
-      <CardHeader className="bg-gradient-to-r from-blue-600 to-blue-700 text-white">
-        <CardTitle className="flex items-center gap-2 text-2xl">
-          <FileText className="h-6 w-6" />
-          Document Request Service
-        </CardTitle>
-        <CardDescription className="text-blue-100">
-          Request barangay clearance, certificates, permits, and other documents
-        </CardDescription>
+    <Card className="shadow-lg max-w-3xl mx-auto">
+      <CardHeader className="bg-gradient-to-r from-blue-600 to-blue-700 text-white flex flex-row items-center justify-between">
+        <div>
+          <CardTitle className="flex items-center gap-2 text-2xl">
+            <FileText className="h-6 w-6" />
+            Document Request Form
+          </CardTitle>
+          <CardDescription className="text-blue-100">
+            Currently requesting: <span className="font-bold text-white underline">{DOCUMENT_TYPES.find(d => d.id === formData.documentType)?.name}</span>
+          </CardDescription>
+        </div>
+        <Button 
+          variant="ghost" 
+          className="text-white hover:bg-white/20" 
+          onClick={() => setStep('selection')}
+        >
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Change
+        </Button>
       </CardHeader>
-      <CardContent className="pt-6">
-        <form onSubmit={handleSubmit} className="space-y-6">
+      <CardContent className="pt-8 px-6 md:px-10">
+        <form onSubmit={handleSubmit} className="space-y-8">
           {/* Personal Information */}
-          <div className="space-y-4">
-            <h3 className="font-semibold text-lg border-b pb-2">Personal Information</h3>
+          <div className="space-y-6">
+            <div className="flex items-center gap-2 border-b pb-2">
+              <CheckCircle2 className="h-5 w-5 text-blue-600" />
+              <h3 className="font-bold text-lg text-gray-800 uppercase tracking-tight">Personal Information</h3>
+            </div>
             
-            <div className="grid md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-6">
               <div className="space-y-2">
-                <Label htmlFor="fullName">Full Name *</Label>
+                <Label htmlFor="fullName" className="text-gray-700 font-medium">Full Name *</Label>
                 <Input
                   id="fullName"
                   type="text"
-                  placeholder="Juan Dela Cruz"
+                  placeholder="Last Name, First Name, Middle Initial"
                   value={formData.fullName}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange('fullName', e.target.value)}
                   disabled={isSubmitting}
                   required
+                  className="border-gray-300 focus:ring-blue-500 h-11"
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="email">Email Address *</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="juan@example.com"
-                  value={formData.email}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange('email', e.target.value)}
-                  disabled={isSubmitting}
-                  required
-                />
-              </div>
-            </div>
+              <div className="grid md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <Label htmlFor="phone" className="text-gray-700 font-medium">Phone Number *</Label>
+                  <Input
+                    id="phone"
+                    type="tel"
+                    placeholder="09XX-XXX-XXXX"
+                    value={formData.phone}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange('phone', e.target.value)}
+                    disabled={isSubmitting}
+                    required
+                    className="border-gray-300 focus:ring-blue-500 h-11"
+                  />
+                </div>
 
-            <div className="grid md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="phone">Phone Number *</Label>
-                <Input
-                  id="phone"
-                  type="tel"
-                  placeholder="09XX-XXX-XXXX"
-                  value={formData.phone}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange('phone', e.target.value)}
-                  disabled={isSubmitting}
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="address">Address in Barangay Irisan</Label>
-                <Input
-                  id="address"
-                  type="text"
-                  placeholder="Purok 18"
-                  value={formData.address}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange('address', e.target.value)}
-                  disabled={isSubmitting}
-                />
+                <div className="space-y-2">
+                  <Label htmlFor="address" className="text-gray-700 font-medium">Address in Barangay Irisan *</Label>
+                  <Input
+                    id="address"
+                    type="text"
+                    placeholder="Purok / Street / House No."
+                    value={formData.address}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange('address', e.target.value)}
+                    disabled={isSubmitting}
+                    required
+                    className="border-gray-300 focus:ring-blue-500 h-11"
+                  />
+                </div>
               </div>
             </div>
           </div>
 
           {/* Document Request Details */}
-          <div className="space-y-4">
-            <h3 className="font-semibold text-lg border-b pb-2">Document Request Details</h3>
-
-            <div className="space-y-2">
-              <Label htmlFor="documentType">Document Type *</Label>
-              <Select 
-                value={formData.documentType} 
-                onValueChange={(value: string) => handleInputChange('documentType', value)}
-                disabled={isSubmitting}
-              >
-                <SelectTrigger id="documentType">
-                  <SelectValue placeholder="Select document type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="barangay-clearance">Barangay Clearance</SelectItem>
-                  <SelectItem value="certificate-of-residency">Certificate of Residency</SelectItem>
-                  <SelectItem value="certificate-of-indigency">Certificate of Indigency</SelectItem>
-                  <SelectItem value="business-permit">Business Permit</SelectItem>
-                  <SelectItem value="certificate-of-good-moral">Certificate of Good Moral Character</SelectItem>
-                  <SelectItem value="barangay-id">Barangay ID</SelectItem>
-                  <SelectItem value="other">Other Document</SelectItem>
-                </SelectContent>
-              </Select>
+          <div className="space-y-6">
+            <div className="flex items-center gap-2 border-b pb-2">
+              <FileText className="h-5 w-5 text-blue-600" />
+              <h3 className="font-bold text-lg text-gray-800 uppercase tracking-tight">Request Details</h3>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="purpose">Purpose of Request *</Label>
+              <Label htmlFor="purpose" className="text-gray-700 font-medium">Purpose of Request *</Label>
               <Input
                 id="purpose"
                 type="text"
-                placeholder="e.g., Employment, School requirement, Business registration"
+                placeholder="e.g., Job Application, Scholarship, Bank Requirement"
                 value={formData.purpose}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange('purpose', e.target.value)}
                 disabled={isSubmitting}
                 required
+                className="border-gray-300 focus:ring-blue-500 h-11"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="additionalInfo">Additional Information</Label>
+              <Label htmlFor="additionalInfo" className="text-gray-700 font-medium">Additional Information (Optional)</Label>
               <Textarea
                 id="additionalInfo"
-                placeholder="Any additional details or special requests..."
+                placeholder="Any special requests or specific details we should know..."
                 value={formData.additionalInfo}
                 onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => handleInputChange('additionalInfo', e.target.value)}
                 disabled={isSubmitting}
                 rows={4}
+                className="border-gray-300 focus:ring-blue-500"
               />
             </div>
           </div>
 
-          {/* Important Notes */}
-          <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-            <h4 className="font-semibold text-blue-900 mb-2">📋 Important Notes:</h4>
-            <ul className="text-sm text-blue-800 space-y-1">
-              <li>• Processing time: 1-3 business days</li>
-              <li>• You will receive a reference ID upon submission</li>
-              <li>• Bring valid ID when claiming the document</li>
-              <li>• Some documents may require additional fees</li>
-              <li>• Updates will be sent via email and SMS</li>
-            </ul>
+          {/* ID Verification Section */}
+          <div className="space-y-6">
+            <div className="flex items-center gap-2 border-b pb-2">
+              <ImageIcon className="h-5 w-5 text-blue-600" />
+              <h3 className="font-bold text-lg text-gray-800 uppercase tracking-tight">ID Verification *</h3>
+            </div>
+            
+            <div className="bg-blue-50/50 p-6 rounded-xl border-2 border-dashed border-blue-200">
+              <div className="flex flex-col items-center justify-center text-center space-y-4">
+                {idPreview ? (
+                  <div className="relative w-full max-w-sm">
+                    <img src={idPreview} alt="ID Preview" className="rounded-lg shadow-md border-2 border-white" />
+                    <Button 
+                      type="button" 
+                      variant="destructive" 
+                      size="sm" 
+                      className="absolute -top-2 -right-2 rounded-full h-8 w-8 p-0"
+                      onClick={() => {
+                        setIdPreview(null)
+                        handleInputChange('idPicture', '')
+                      }}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="p-4 bg-blue-100 rounded-full">
+                      <Upload className="h-10 w-10 text-blue-600" />
+                    </div>
+                    <div>
+                      <p className="text-blue-900 font-bold">Upload a Valid ID</p>
+                      <p className="text-sm text-blue-700">Required to prevent troll requests. PNG, JPG up to 5MB.</p>
+                    </div>
+                    <Input 
+                      type="file" 
+                      accept="image/*" 
+                      className="hidden" 
+                      id="id-upload" 
+                      onChange={handleFileChange}
+                    />
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      className="border-blue-300 hover:bg-blue-100"
+                      onClick={() => document.getElementById('id-upload')?.click()}
+                    >
+                      Select Image
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Important Warning */}
+          <div className="bg-amber-50 p-6 rounded-xl border border-amber-200 shadow-sm">
+            <h4 className="font-bold text-amber-900 mb-2 flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5" />
+              Confirmation:
+            </h4>
+            <p className="text-sm text-amber-800 font-medium">
+              By clicking submit, you confirm that all information provided is accurate and that you are a resident of Barangay Irisan.
+            </p>
           </div>
 
           {/* Submit Button */}
           <Button 
             type="submit" 
-            className="w-full bg-blue-600 hover:bg-blue-700 text-lg py-6"
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xl py-8 shadow-md transition-all hover:scale-[1.01] active:scale-[0.99]"
             disabled={isSubmitting}
           >
-            <Send className="mr-2 h-5 w-5" />
-            {isSubmitting ? 'Submitting...' : 'Submit Document Request'}
+            <Send className="mr-3 h-6 w-6" />
+            {isSubmitting ? 'SUBMITTING REQUEST...' : 'SUBMIT DOCUMENT REQUEST'}
           </Button>
         </form>
       </CardContent>

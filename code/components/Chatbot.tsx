@@ -92,8 +92,8 @@ export default function Chatbot() {
       return "We value your feedback! 💚\n\nThe 'Feedback' tab allows you to:\n• Rate barangay services (1-5 stars)\n• Share your experience\n• Provide suggestions for improvement\n• Help us serve you better\n\nYour honest feedback promotes transparency and accountability in our community services."
     }
 
-    // Default response with suggestions
-    return `I understand you're asking about "${userMessage}". Let me help you with that!\n\n🌟 I can assist you with:\n\n• 📄 Document requests (clearances, certificates, permits)\n• 🚨 Reporting issues or emergencies\n• 🕐 Office hours and contact information\n• 📊 Tracking your requests\n• 📢 Community announcements\n• 🗺️ Using the map feature\n• 💬 Providing feedback\n\nCould you please tell me more about what you need? For example, you can ask "How do I request a clearance?" or "What are your office hours?"`
+    // Default response for unrelated or random questions
+    return `I might not be able to help with "${userMessage}".\n\nI'm designed mainly for Barangay Irisan services, like:\n\n• 📄 Document requests (clearances, certificates, permits)\n• 🚨 Reporting issues or emergencies\n• 🕐 Office hours and contact information\n• 📊 Tracking your requests\n• 📢 Community announcements\n• 🗺️ Using the map feature\n• 💬 Providing feedback\n\nPlease try asking something related to these services so I can assist you better.`
   }
 
   const handleSend = async () => {

@@ -23,6 +23,6 @@ const CommunityMap = dynamic(() => import('./CommunityMap'), {
   ),
 })
 
-export default function CommunityMapWrapper(): React.JSX.Element {
-  return <CommunityMap />
+export default function CommunityMapWrapper({ onBack }: { onBack?: () => void }): React.JSX.Element {
+  return <CommunityMap onBack={onBack} />
 }

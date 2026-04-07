@@ -1,6 +1,6 @@
 import mongoose, { Schema, type Document } from 'mongoose';
 
-export interface IUser extends Document {
+export interface IResident extends Document {
   _id: mongoose.Types.ObjectId;
   username: string;
   password: string;
@@ -13,7 +13,7 @@ export interface IUser extends Document {
   updatedAt: Date;
 }
 
-const UserSchema: Schema = new Schema(
+const ResidentSchema: Schema = new Schema(
   {
     username: {
       type: String,
@@ -55,4 +55,5 @@ const UserSchema: Schema = new Schema(
   }
 );
 
-export default mongoose.models.User || mongoose.model<IUser>('User', UserSchema);
+export default mongoose.models.Resident || mongoose.model<IResident>('Resident', ResidentSchema);
+
