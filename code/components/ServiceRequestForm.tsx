@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
 import { saveServiceRequest } from '@/lib/storage'
-import type { LocalServiceRequest } from '@/lib/types'
+import type { ServiceRequest } from '@/lib/types'
 import { FileText, Send, CheckCircle2, ShieldCheck, ChevronRight, ArrowLeft, Upload, Image as ImageIcon, X, MapPin } from 'lucide-react'
 import {
   Dialog,
@@ -122,7 +122,7 @@ export default function ServiceRequestForm({ onBack, residentUser }: { onBack?: 
       const referenceId = (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
         ? crypto.randomUUID()
         : `${Date.now()}`
-      const localReq: LocalServiceRequest = {
+      const localReq: ServiceRequest = {
         referenceId,
         fullName: formData.fullName,
         email: residentUser?.email || '', 

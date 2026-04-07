@@ -170,7 +170,8 @@ export default function ReportForm({ onBack, residentUser }: { onBack?: () => vo
         location: '',
         reportType: '',
         priority: 'medium',
-        description: ''
+        description: '',
+        idPicture: ''
       })
     } catch (error) {
       console.error('Error submitting report:', error)

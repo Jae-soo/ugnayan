@@ -110,14 +110,7 @@ export function useNotifications() {
   }
 
   return {
-    notifications: notifications.map(n => ({
-      id: n._id, // Map _id to id for component compatibility
-      type: n.type,
-      entityId: n.link || '', // Use link as entityId or relatedId if available
-      message: n.message,
-      createdAt: new Date(n.createdAt).getTime(),
-      read: n.read
-    })),
+    notifications,
     loading,
     fetchNotifications,
     markRead,

@@ -43,6 +43,7 @@ import { toast } from 'sonner'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import NotificationsBell from '@/components/NotificationsBell'
+import NotificationCenter from '@/components/NotificationCenter'
 import { useRouter } from 'next/navigation'
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer } from 'recharts'
 import type { ServiceRequest, Report } from '@/lib/types'
@@ -245,6 +246,7 @@ export default function UgnayanAppWithAuth(): React.JSX.Element {
   const { connected, userProfile, statusMessage, logoutUser } = useSpacetimeDB()
   const { notifications, markAllRead, clearAll } = useNotifications()
   const [activeTab, setActiveTab] = useState<string>('home')
+  const [showNotificationCenter, setShowNotificationCenter] = useState<boolean>(false)
   const [loginOpen, setLoginOpen] = useState<boolean>(false)
   // Removed official login modal for residents
   const [registerOpen, setRegisterOpen] = useState<boolean>(false)
@@ -281,6 +283,7 @@ export default function UgnayanAppWithAuth(): React.JSX.Element {
                 notifications={notifications}
                 onMarkAllRead={markAllRead}
                 onClearAll={clearAll}
+                onOpenCenter={() => setShowNotificationCenter(true)}
               />
               
               {/* Connection Status */}
@@ -333,7 +336,17 @@ export default function UgnayanAppWithAuth(): React.JSX.Element {
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        {showNotificationCenter ? (
+          <NotificationCenter 
+            residentUser={userProfile} 
+            onBack={() => setShowNotificationCenter(false)} 
+            onNavigate={(tab) => {
+              setActiveTab(tab)
+              setShowNotificationCenter(false)
+            }}
+          />
+        ) : (
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           {/* Navigation Tabs */}
           <TabsList className={`grid gap-2 bg-white p-2 shadow-md h-auto grid-cols-4 lg:grid-cols-9`}>
             <TabsTrigger value="home" className="flex flex-col items-center gap-1 py-3">
@@ -581,6 +594,7 @@ export default function UgnayanAppWithAuth(): React.JSX.Element {
 
           {/* Admin dashboard removed from resident dashboard */}
         </Tabs>
+         )}
       </main>
 
       {/* Modals */}

@@ -1,4 +1,4 @@
-import type { Complaint, DocumentRequest, LocalServiceRequest as ServiceRequest, Report, Blotter, Reply } from './types';
+import type { Complaint, DocumentRequest, ServiceRequest, Report, Blotter, Reply } from './types';
 
 const COMPLAINTS_KEY = 'barangay_complaints';
 const DOCUMENTS_KEY = 'barangay_documents';

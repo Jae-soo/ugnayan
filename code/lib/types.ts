@@ -20,7 +20,7 @@ export interface DocumentRequest {
   submittedAt: string;
 }
 
-export interface LocalServiceRequest {
+export interface ServiceRequest {
   referenceId: string;
   fullName: string;
   email: string;
@@ -29,7 +29,7 @@ export interface LocalServiceRequest {
   documentType: string;
   purpose: string;
   additionalInfo?: string;
-  status: 'pending' | 'in-progress' | 'ready' | 'completed' | 'rejected';
+  status: 'pending' | 'processing' | 'ready_for_pickup' | 'completed' | 'rejected' | 'ready' | 'in-progress';
   submittedAt: string;
   idPicture?: string; // Base64 or URL
 }
@@ -45,6 +45,7 @@ export interface Report {
   description: string;
   status: 'pending' | 'in-progress' | 'resolved' | 'rejected';
   submittedAt: string;
+  idPicture?: string; // Base64 or URL
 }
 
 export interface Blotter {
