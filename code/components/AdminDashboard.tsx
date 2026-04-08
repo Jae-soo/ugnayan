@@ -348,7 +348,7 @@ export default function AdminDashboard({ officialInfo }: AdminDashboardProps): R
   const filteredReports = reports.filter(rep =>
     rep.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
     rep.referenceId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    rep.location.toLowerCase().includes(searchQuery.toLowerCase())
+    (rep.location || '').toLowerCase().includes(searchQuery.toLowerCase())
   )
 
   const filteredUsers = users.filter(user =>
