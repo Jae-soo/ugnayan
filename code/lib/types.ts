@@ -22,6 +22,10 @@ export interface DocumentRequest {
 
 export interface ServiceRequest {
   referenceId: string;
+  _id?: string;
+  id?: string;
+  requestId?: string;
+  reportId?: string;
   fullName: string;
   email: string;
   phone: string;
@@ -29,6 +33,8 @@ export interface ServiceRequest {
   documentType: string;
   purpose: string;
   additionalInfo?: string;
+  adminNotes?: string;
+  response?: string;
   status: 'pending' | 'processing' | 'ready_for_pickup' | 'completed' | 'rejected' | 'ready' | 'in-progress' | 'resolved';
   submittedAt: string;
   idPicture?: string; // Base64 or URL
