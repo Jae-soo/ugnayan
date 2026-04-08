@@ -256,7 +256,17 @@ export async function getDocumentRequests(filters = {}) {
   
   const query = {};
   if (filters.status) query.status = filters.status;
-  if (filters.email) query.residentEmail = filters.email.toLowerCase();
+  
+  // Enhanced search: allow identifier to match email, phone, or name
+  if (filters.email) {
+    const identifier = filters.email.toLowerCase();
+    query.$or = [
+      { residentEmail: identifier },
+      { residentPhone: identifier },
+      { residentName: { $regex: identifier, $options: 'i' } }
+    ];
+  }
+  
   if (filters.documentType) query.documentType = filters.documentType;
   
   return await DocumentRequest.find(query).sort({ createdAt: -1 });
@@ -372,44 +382,37 @@ export async function getServiceRequests(filters = {}) {
   if (filters.status) query.status = filters.status;
   if (filters.type) query.type = filters.type;
   
+  // Enhanced search: match email, phone, or name
   if (filters.email) {
     const identifier = filters.email.toLowerCase();
-    const phoneDigits = identifier.replace(/\D/g, '');
-    
-    const orConditions = [
+    query.$or = [
       { residentEmail: identifier },
       { residentPhone: identifier },
       { residentName: { $regex: identifier, $options: 'i' } }
     ];
+  }
+  
+  return await ServiceRequest.find(query).sort({ createdAt: -1 });
+}
 
-    // If it looks like a MongoDB ID
-    if (identifier.match(/^[0-9a-fA-F]{24}$/)) {
-      orConditions.push({ _id: identifier });
-    }
-
-    // Improved phone matching: handle 09, +639, 639 prefixes
-    if (phoneDigits.length >= 7) {
-      // Extract the last 10 digits (common for PH mobile numbers without the leading 0 or prefix)
-      const last10 = phoneDigits.slice(-10);
-      
-      orConditions.push(
-        { residentPhone: { $regex: phoneDigits, $options: 'i' } },
-        { residentPhone: { $regex: last10, $options: 'i' } }
-      );
-      
-      // If the identifier was +63999..., phoneDigits is 63999... 
-      // If stored number is 0999..., we should also check for that
-      if (phoneDigits.startsWith('63') && phoneDigits.length >= 12) {
-        const leadingZeroVersion = '0' + phoneDigits.slice(2);
-        orConditions.push({ residentPhone: leadingZeroVersion });
-      } else if (phoneDigits.startsWith('0') && phoneDigits.length === 11) {
-        const plus63Version = '+63' + phoneDigits.slice(1);
-        const nonPlus63Version = '63' + phoneDigits.slice(1);
-        orConditions.push({ residentPhone: plus63Version }, { residentPhone: nonPlus63Version });
-      }
-    }
-
-    query.$or = orConditions;
+/**
+ * Get reports with optional filters
+ */
+export async function getReports(filters = {}) {
+  await dbConnect();
+  
+  const query = { type: { $ne: 'document' } };
+  if (filters.status) query.status = filters.status;
+  if (filters.category) query.type = filters.category;
+  
+  // Enhanced search: match email, phone, or name
+  if (filters.email) {
+    const identifier = filters.email.toLowerCase();
+    query.$or = [
+      { residentEmail: identifier },
+      { residentPhone: identifier },
+      { residentName: { $regex: identifier, $options: 'i' } }
+    ];
   }
   
   return await ServiceRequest.find(query).sort({ createdAt: -1 });

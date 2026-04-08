@@ -332,12 +332,12 @@ export default function MyRequests({ residentUser, onBack }: { residentUser?: an
           <div className="space-y-4">
             {!residentUser && (
               <div className="space-y-2">
-                <Label htmlFor="searchEmail">Enter Your Email Address</Label>
+                <Label htmlFor="searchEmail">Email, Phone, or Name</Label>
                 <div className="flex gap-2">
                   <Input
                     id="searchEmail"
-                    type="email"
-                    placeholder="your.email@example.com"
+                    type="text"
+                    placeholder="Enter email, phone number, or full name"
                     value={searchEmail}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchEmail(e.target.value)}
                     onKeyPress={(e: React.KeyboardEvent<HTMLInputElement>) => {

@@ -487,7 +487,7 @@ export default function AdminDashboard({ officialInfo }: AdminDashboardProps): R
 
       {/* Management Tabs */}
       <Tabs defaultValue="requests" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="requests">
             <FileText className="h-4 w-4 mr-2" />
             Service Requests
@@ -499,6 +499,10 @@ export default function AdminDashboard({ officialInfo }: AdminDashboardProps): R
           <TabsTrigger value="users">
             <Users className="h-4 w-4 mr-2" />
             Users
+          </TabsTrigger>
+          <TabsTrigger value="business">
+            <Activity className="h-4 w-4 mr-2" />
+            Business Analytics
           </TabsTrigger>
           <TabsTrigger value="announcements">
             <Bell className="h-4 w-4 mr-2" />
