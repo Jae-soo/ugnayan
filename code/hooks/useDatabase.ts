@@ -271,17 +271,17 @@ export function useDatabase(): DatabaseState & DatabaseActions {
     }
 
     try {
-      setStatusMessage('Submitting report...')
-      const response = await fetch('/api/reports', {
+      setStatusMessage('Submitting issue report...')
+      const response = await fetch('/api/service-request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId: userProfile.id,
-          reportType,
+          type: reportType,
           priority,
-          fullName,
-          email,
-          phone,
+          residentName: fullName,
+          residentEmail: email,
+          residentPhone: phone,
           location,
           description,
         }),
@@ -290,16 +290,16 @@ export function useDatabase(): DatabaseState & DatabaseActions {
       const data = await response.json()
 
       if (data.success) {
-        setStatusMessage('Report submitted successfully')
-        await fetchReports(userProfile.id)
+        setStatusMessage('Issue report submitted successfully')
+        await fetchServiceRequests(userProfile.id)
       } else {
-        setStatusMessage(data.message || 'Failed to submit report')
+        setStatusMessage(data.message || 'Failed to submit issue report')
       }
     } catch (error: unknown) {
-      console.error('Report submission error:', error)
-      setStatusMessage('Failed to submit report')
+      console.error('Issue report error:', error)
+      setStatusMessage('Failed to submit issue report')
     }
-  }, [userProfile])
+  }, [userProfile, fetchServiceRequests])
 
   const fetchServiceRequests = useCallback(async (userId?: string) => {
     try {
@@ -308,34 +308,29 @@ export function useDatabase(): DatabaseState & DatabaseActions {
       const data = await response.json()
 
       if (data.success) {
-        setServiceRequests(data.serviceRequests)
+        const items = data.serviceRequests || data.requests || []
+        const reqs = items.filter((r: any) => r.type === 'document')
+        const reps = items.filter((r: any) => r.type !== 'document')
+        setServiceRequests(reqs as unknown as ServiceRequestItem[])
+        setReports(reps as unknown as ReportItem[])
       } else {
         const local = getLocalServiceRequests()
         setServiceRequests(local as unknown as ServiceRequestItem[])
+        const localReps = getLocalReports()
+        setReports(localReps as unknown as ReportItem[])
       }
     } catch (error: unknown) {
       const local = getLocalServiceRequests()
       setServiceRequests(local as unknown as ServiceRequestItem[])
+      const localReps = getLocalReports()
+      setReports(localReps as unknown as ReportItem[])
     }
   }, [])
 
   const fetchReports = useCallback(async (userId?: string) => {
-    try {
-      const url = userId ? `/api/reports?userId=${userId}` : '/api/reports'
-      const response = await fetch(url)
-      const data = await response.json()
-
-      if (data.success) {
-        setReports(data.reports)
-      } else {
-        const local = getLocalReports()
-        setReports(local as unknown as ReportItem[])
-      }
-    } catch (error: unknown) {
-      const local = getLocalReports()
-      setReports(local as unknown as ReportItem[])
-    }
-  }, [])
+    // Already handled in fetchServiceRequests
+    return fetchServiceRequests(userId)
+  }, [fetchServiceRequests])
 
   const fetchAnnouncements = useCallback(async () => {
     try {
@@ -385,7 +380,8 @@ export function useDatabase(): DatabaseState & DatabaseActions {
 
   const updateReportStatus = useCallback(async (id: string, status: string) => {
     try {
-      const response = await fetch('/api/reports', {
+      setStatusMessage('Updating report status...')
+      const response = await fetch('/api/service-request', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, status }),
@@ -394,21 +390,16 @@ export function useDatabase(): DatabaseState & DatabaseActions {
       const data = await response.json()
 
       if (data.success) {
-        setStatusMessage('Status updated successfully')
-        await fetchReports()
+        setStatusMessage('Report status updated successfully')
+        if (userProfile) await fetchServiceRequests(userProfile.id)
       } else {
-        updateLocalReportStatus(id, status)
-        const local = getLocalReports()
-        setReports(local as unknown as ReportItem[])
-        setStatusMessage('Updated locally')
+        setStatusMessage(data.message || 'Failed to update report status')
       }
     } catch (error: unknown) {
-      updateLocalReportStatus(id, status)
-      const local = getLocalReports()
-      setReports(local as unknown as ReportItem[])
-      setStatusMessage('Updated locally')
+      console.error('Update report status error:', error)
+      setStatusMessage('Failed to update report status')
     }
-  }, [fetchReports])
+  }, [userProfile, fetchServiceRequests])
 
   const syncLocalData = useCallback(async (): Promise<void> => {
     try {

@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner'
 import { saveServiceRequest } from '@/lib/storage'
 import type { ServiceRequest } from '@/lib/types'
-import { FileText, Send, CheckCircle2, ShieldCheck, ChevronRight, ArrowLeft, Upload, Image as ImageIcon, X, MapPin } from 'lucide-react'
+import { FileText, Send, CheckCircle2, ShieldCheck, ChevronRight, ArrowLeft, Upload, Image as ImageIcon, X, MapPin, AlertTriangle, Mountain, CloudRain } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -20,21 +20,30 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 
-const DOCUMENT_TYPES = [
-  { id: 'barangay-clearance', name: 'Barangay Clearance', icon: <FileText className="h-10 w-10 text-blue-600" />, description: 'Required for job applications, ID applications, and other legal purposes.' },
-  { id: 'certificate-of-residency', name: 'Certificate of Residency', icon: <MapPin className="h-10 w-10 text-green-600" />, description: 'Proof that you are a resident of Barangay Irisan.' },
-  { id: 'certificate-of-indigency', name: 'Certificate of Indigency', icon: <ShieldCheck className="h-10 w-10 text-orange-600" />, description: 'For scholarship, medical assistance, or social service requirements.' },
-  { id: 'business-permit', name: 'Business Permit', icon: <ImageIcon className="h-10 w-10 text-purple-600" />, description: 'Clearance to operate a business within the barangay.' },
-  { id: 'certificate-of-good-moral', name: 'Certificate of Good Moral', icon: <CheckCircle2 className="h-10 w-10 text-indigo-600" />, description: 'Often required for school or employment.' },
-  { id: 'barangay-id', name: 'Barangay ID', icon: <ImageIcon className="h-10 w-10 text-red-600" />, description: 'Official identification card issued by the barangay.' },
-  { id: 'other', name: 'Other Document', icon: <FileText className="h-10 w-10 text-gray-600" />, description: 'Any other specialized barangay documents.' },
+const SERVICE_TYPES = [
+  // Document Types
+  { id: 'barangay-clearance', name: 'Barangay Clearance', icon: <FileText className="h-10 w-10 text-blue-600" />, description: 'Required for job applications, ID applications, and other legal purposes.', category: 'document' },
+  { id: 'certificate-of-residency', name: 'Certificate of Residency', icon: <MapPin className="h-10 w-10 text-green-600" />, description: 'Proof that you are a resident of Barangay Irisan.', category: 'document' },
+  { id: 'certificate-of-indigency', name: 'Certificate of Indigency', icon: <ShieldCheck className="h-10 w-10 text-orange-600" />, description: 'For scholarship, medical assistance, or social service requirements.', category: 'document' },
+  { id: 'business-permit', name: 'Business Permit', icon: <ImageIcon className="h-10 w-10 text-purple-600" />, description: 'Clearance to operate a business within the barangay.', category: 'document' },
+  { id: 'certificate-of-good-moral', name: 'Certificate of Good Moral', icon: <CheckCircle2 className="h-10 w-10 text-indigo-600" />, description: 'Often required for school or employment.', category: 'document' },
+  { id: 'barangay-id', name: 'Barangay ID', icon: <ImageIcon className="h-10 w-10 text-red-600" />, description: 'Official identification card issued by the barangay.', category: 'document' },
+  { id: 'other-document', name: 'Other Document', icon: <FileText className="h-10 w-10 text-gray-600" />, description: 'Any other specialized barangay documents.', category: 'document' },
+  
+  // Report Types
+  { id: 'emergency', name: 'Emergency', icon: <AlertTriangle className="h-10 w-10 text-red-600" />, description: 'Fire, Accident, or Medical emergencies.', category: 'report' },
+  { id: 'landslide', name: 'Landslide / Erosion', icon: <Mountain className="h-10 w-10 text-orange-700" />, description: 'Report soil erosion or landslide hazards.', category: 'report' },
+  { id: 'flooding', name: 'Flooding', icon: <CloudRain className="h-10 w-10 text-blue-400" />, description: 'Report drainage problems or flooding.', category: 'report' },
+  { id: 'road-issue', name: 'Road Issue', icon: <MapPin className="h-10 w-10 text-gray-700" />, description: 'Potholes, broken roads, or infrastructure problems.', category: 'report' },
+  { id: 'other-report', name: 'Other Issue', icon: <AlertTriangle className="h-10 w-10 text-yellow-600" />, description: 'General community concerns or hazards.', category: 'report' },
 ]
 
-export default function ServiceRequestForm({ onBack, residentUser }: { onBack?: () => void; residentUser?: any }): React.JSX.Element {
+export default function ServiceRequestForm({ onBack, residentUser, initialCategory = 'document' }: { onBack?: () => void; residentUser?: any; initialCategory?: 'document' | 'report' }): React.JSX.Element {
   const [step, setStep] = useState<'selection' | 'form'>('selection')
   const [showTerms, setShowTerms] = useState(false)
   const [selectedDoc, setSelectedDoc] = useState<string | null>(null)
   const [idPreview, setIdPreview] = useState<string | null>(null)
+  const [currentCategory, setCurrentCategory] = useState<'document' | 'report'>(initialCategory)
   
   const [formData, setFormData] = useState({
     fullName: residentUser?.fullName || '',
@@ -43,7 +52,9 @@ export default function ServiceRequestForm({ onBack, residentUser }: { onBack?: 
     documentType: '',
     purpose: '',
     additionalInfo: '',
-    idPicture: ''
+    idPicture: '',
+    location: '',
+    priority: 'medium' as 'low' | 'medium' | 'high'
   })
 
   // Update form if residentUser changes (e.g. logs in while on page)
@@ -62,6 +73,8 @@ export default function ServiceRequestForm({ onBack, residentUser }: { onBack?: 
 
   const handleDocSelect = (docId: string) => {
     setSelectedDoc(docId)
+    const category = SERVICE_TYPES.find(s => s.id === docId)?.category || 'document'
+    setCurrentCategory(category as any)
     setShowTerms(true)
   }
 
@@ -99,7 +112,7 @@ export default function ServiceRequestForm({ onBack, residentUser }: { onBack?: 
     e.preventDefault()
     setIsSubmitting(true)
 
-    if (!formData.fullName || !formData.phone || !formData.address || !formData.documentType || !formData.purpose) {
+    if (!formData.fullName || !formData.phone || (!formData.address && currentCategory === 'document') || (!formData.location && currentCategory === 'report') || !formData.documentType || !formData.purpose) {
       toast.error('Please fill in all required fields')
       setIsSubmitting(false)
       return
@@ -127,13 +140,16 @@ export default function ServiceRequestForm({ onBack, residentUser }: { onBack?: 
         fullName: formData.fullName,
         email: residentUser?.email || '', 
         phone: formData.phone,
-        address: formData.address,
+        address: formData.address || formData.location || '',
         documentType: formData.documentType,
         purpose: formData.purpose,
         status: 'pending',
         submittedAt: new Date().toISOString(),
         additionalInfo: formData.additionalInfo || undefined,
-        idPicture: formData.idPicture
+        idPicture: formData.idPicture,
+        location: formData.location,
+        priority: currentCategory === 'report' ? formData.priority : undefined,
+        reportType: currentCategory === 'report' ? formData.documentType as any : undefined
       }
       saveServiceRequest(localReq)
       try { window.dispatchEvent(new Event('barangay_service_requests_updated')) } catch {}
@@ -146,7 +162,7 @@ export default function ServiceRequestForm({ onBack, residentUser }: { onBack?: 
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            type: 'document',
+            type: currentCategory === 'document' ? 'document' : formData.documentType,
             description: formData.purpose,
             residentName: formData.fullName,
             residentEmail: residentUser?.email || '', 
@@ -155,7 +171,9 @@ export default function ServiceRequestForm({ onBack, residentUser }: { onBack?: 
             documentType: formData.documentType,
             purpose: formData.purpose,
             additionalInfo: formData.additionalInfo,
-            idPicture: formData.idPicture
+            idPicture: formData.idPicture,
+            location: formData.location,
+            priority: formData.priority
           }),
         })
         if (response.ok) {
@@ -181,7 +199,9 @@ export default function ServiceRequestForm({ onBack, residentUser }: { onBack?: 
         documentType: '',
         purpose: '',
         additionalInfo: '',
-        idPicture: ''
+        idPicture: '',
+        location: '',
+        priority: 'medium'
       })
       setIdPreview(null)
       setStep('selection')
@@ -210,31 +230,33 @@ export default function ServiceRequestForm({ onBack, residentUser }: { onBack?: 
         <Card className="shadow-lg border-blue-100 overflow-hidden">
           <CardHeader className="bg-gradient-to-r from-blue-600 to-blue-700 text-white text-center py-8">
             <CardTitle className="text-3xl font-bold flex items-center justify-center gap-3">
-              <FileText className="h-8 w-8" />
-              Document Selection
+              {currentCategory === 'document' ? <FileText className="h-8 w-8" /> : <AlertTriangle className="h-8 w-8" />}
+              {currentCategory === 'document' ? 'Document Selection' : 'Issue Selection'}
             </CardTitle>
             <CardDescription className="text-blue-100 text-lg mt-2">
-              Select the document you wish to request from Barangay Irisan
+              {currentCategory === 'document' 
+                ? 'Select the document you wish to request from Barangay Irisan' 
+                : 'Select the type of issue you want to report'}
             </CardDescription>
           </CardHeader>
           <CardContent className="p-8">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {DOCUMENT_TYPES.map((doc) => (
+              {SERVICE_TYPES.filter(s => s.category === currentCategory).map((doc) => (
                 <Card 
                   key={doc.id} 
-                  className="cursor-pointer hover:shadow-xl transition-all hover:scale-[1.03] border-2 hover:border-blue-400 group relative overflow-hidden"
+                  className={`cursor-pointer hover:shadow-xl transition-all hover:scale-[1.03] border-2 group relative overflow-hidden ${currentCategory === 'document' ? 'hover:border-blue-400' : 'hover:border-orange-400'}`}
                   onClick={() => handleDocSelect(doc.id)}
                 >
                   <CardHeader className="pb-2">
                     <div className="mb-3 group-hover:scale-110 transition-transform">
                       {doc.icon}
                     </div>
-                    <CardTitle className="text-xl group-hover:text-blue-600 transition-colors">{doc.name}</CardTitle>
+                    <CardTitle className={`text-xl transition-colors ${currentCategory === 'document' ? 'group-hover:text-blue-600' : 'group-hover:text-orange-600'}`}>{doc.name}</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <p className="text-sm text-gray-600 line-clamp-2">{doc.description}</p>
-                    <div className="mt-4 flex items-center text-blue-600 font-semibold text-sm">
-                      Request Now <ChevronRight className="h-4 w-4 ml-1 group-hover:translate-x-1 transition-transform" />
+                    <div className={`mt-4 flex items-center font-semibold text-sm ${currentCategory === 'document' ? 'text-blue-600' : 'text-orange-600'}`}>
+                      {currentCategory === 'document' ? 'Request Now' : 'Report Now'} <ChevronRight className="h-4 w-4 ml-1 group-hover:translate-x-1 transition-transform" />
                     </div>
                   </CardContent>
                 </Card>
@@ -284,14 +306,14 @@ export default function ServiceRequestForm({ onBack, residentUser }: { onBack?: 
 
   return (
     <Card className="shadow-lg max-w-3xl mx-auto">
-      <CardHeader className="bg-gradient-to-r from-blue-600 to-blue-700 text-white flex flex-row items-center justify-between">
+      <CardHeader className={`bg-gradient-to-r ${currentCategory === 'document' ? 'from-blue-600 to-blue-700' : 'from-orange-600 to-red-600'} text-white flex flex-row items-center justify-between`}>
         <div>
           <CardTitle className="flex items-center gap-2 text-2xl">
-            <FileText className="h-6 w-6" />
-            Document Request Form
+            {currentCategory === 'document' ? <FileText className="h-6 w-6" /> : <AlertTriangle className="h-6 w-6" />}
+            {currentCategory === 'document' ? 'Document Request Form' : 'Issue Report Form'}
           </CardTitle>
-          <CardDescription className="text-blue-100">
-            Currently requesting: <span className="font-bold text-white underline">{DOCUMENT_TYPES.find(d => d.id === formData.documentType)?.name}</span>
+          <CardDescription className={currentCategory === 'document' ? 'text-blue-100' : 'text-orange-100'}>
+            Currently {currentCategory === 'document' ? 'requesting' : 'reporting'}: <span className="font-bold text-white underline">{SERVICE_TYPES.find(d => d.id === formData.documentType)?.name}</span>
           </CardDescription>
         </div>
         <Button 
@@ -308,7 +330,7 @@ export default function ServiceRequestForm({ onBack, residentUser }: { onBack?: 
           {/* Personal Information */}
           <div className="space-y-6">
             <div className="flex items-center gap-2 border-b pb-2">
-              <CheckCircle2 className="h-5 w-5 text-blue-600" />
+              <CheckCircle2 className={`h-5 w-5 ${currentCategory === 'document' ? 'text-blue-600' : 'text-orange-600'}`} />
               <h3 className="font-bold text-lg text-gray-800 uppercase tracking-tight">Personal Information</h3>
             </div>
             
@@ -323,7 +345,7 @@ export default function ServiceRequestForm({ onBack, residentUser }: { onBack?: 
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange('fullName', e.target.value)}
                   disabled={isSubmitting}
                   required
-                  className="border-gray-300 focus:ring-blue-500 h-11"
+                  className={`border-gray-300 ${currentCategory === 'document' ? 'focus:ring-blue-500' : 'focus:ring-orange-500'} h-11`}
                 />
               </div>
 
@@ -338,12 +360,14 @@ export default function ServiceRequestForm({ onBack, residentUser }: { onBack?: 
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange('phone', e.target.value)}
                     disabled={isSubmitting}
                     required
-                    className="border-gray-300 focus:ring-blue-500 h-11"
+                    className={`border-gray-300 ${currentCategory === 'document' ? 'focus:ring-blue-500' : 'focus:ring-orange-500'} h-11`}
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="address" className="text-gray-700 font-medium">Address in Barangay Irisan *</Label>
+                  <Label htmlFor="address" className="text-gray-700 font-medium">
+                    {currentCategory === 'document' ? 'Address in Barangay Irisan *' : 'Your Address (Optional)'}
+                  </Label>
                   <Input
                     id="address"
                     type="text"
@@ -351,45 +375,82 @@ export default function ServiceRequestForm({ onBack, residentUser }: { onBack?: 
                     value={formData.address}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange('address', e.target.value)}
                     disabled={isSubmitting}
-                    required
-                    className="border-gray-300 focus:ring-blue-500 h-11"
+                    required={currentCategory === 'document'}
+                    className={`border-gray-300 ${currentCategory === 'document' ? 'focus:ring-blue-500' : 'focus:ring-orange-500'} h-11`}
                   />
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Document Request Details */}
+          {/* Request Details */}
           <div className="space-y-6">
             <div className="flex items-center gap-2 border-b pb-2">
-              <FileText className="h-5 w-5 text-blue-600" />
-              <h3 className="font-bold text-lg text-gray-800 uppercase tracking-tight">Request Details</h3>
+              {currentCategory === 'document' ? <FileText className="h-5 w-5 text-blue-600" /> : <AlertTriangle className="h-5 w-5 text-orange-600" />}
+              <h3 className="font-bold text-lg text-gray-800 uppercase tracking-tight">
+                {currentCategory === 'document' ? 'Request Details' : 'Issue Details'}
+              </h3>
             </div>
 
+            {currentCategory === 'report' && (
+              <div className="grid md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <Label htmlFor="location" className="text-gray-700 font-medium">Location of Issue *</Label>
+                  <Input
+                    id="location"
+                    type="text"
+                    placeholder="Specific location or landmark"
+                    value={formData.location}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange('location', e.target.value)}
+                    disabled={isSubmitting}
+                    required
+                    className="border-gray-300 focus:ring-orange-500 h-11"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="priority" className="text-gray-700 font-medium">Priority Level *</Label>
+                  <Select value={formData.priority} onValueChange={(v) => handleInputChange('priority', v)}>
+                    <SelectTrigger className="h-11 border-gray-300 focus:ring-orange-500">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">Low - Minor concern</SelectItem>
+                      <SelectItem value="medium">Medium - Needs attention</SelectItem>
+                      <SelectItem value="high">High - Urgent / Emergency</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+
             <div className="space-y-2">
-              <Label htmlFor="purpose" className="text-gray-700 font-medium">Purpose of Request *</Label>
+              <Label htmlFor="purpose" className="text-gray-700 font-medium">
+                {currentCategory === 'document' ? 'Purpose of Request *' : 'Description of Issue *'}
+              </Label>
               <Input
                 id="purpose"
                 type="text"
-                placeholder="e.g., Job Application, Scholarship, Bank Requirement"
+                placeholder={currentCategory === 'document' ? 'e.g., Job Application, Scholarship' : 'Short summary of the issue'}
                 value={formData.purpose}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange('purpose', e.target.value)}
                 disabled={isSubmitting}
                 required
-                className="border-gray-300 focus:ring-blue-500 h-11"
+                className={`border-gray-300 ${currentCategory === 'document' ? 'focus:ring-blue-500' : 'focus:ring-orange-500'} h-11`}
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="additionalInfo" className="text-gray-700 font-medium">Additional Information (Optional)</Label>
+              <Label htmlFor="additionalInfo" className="text-gray-700 font-medium">
+                {currentCategory === 'document' ? 'Additional Information (Optional)' : 'Detailed Context / Information'}
+              </Label>
               <Textarea
                 id="additionalInfo"
-                placeholder="Any special requests or specific details we should know..."
+                placeholder={currentCategory === 'document' ? 'Any special requests...' : 'Provide more details about what is happening...'}
                 value={formData.additionalInfo}
                 onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => handleInputChange('additionalInfo', e.target.value)}
                 disabled={isSubmitting}
                 rows={4}
-                className="border-gray-300 focus:ring-blue-500"
+                className={`border-gray-300 ${currentCategory === 'document' ? 'focus:ring-blue-500' : 'focus:ring-orange-500'}`}
               />
             </div>
           </div>
@@ -397,11 +458,11 @@ export default function ServiceRequestForm({ onBack, residentUser }: { onBack?: 
           {/* ID Verification Section */}
           <div className="space-y-6">
             <div className="flex items-center gap-2 border-b pb-2">
-              <ImageIcon className="h-5 w-5 text-blue-600" />
+              <ImageIcon className={`h-5 w-5 ${currentCategory === 'document' ? 'text-blue-600' : 'text-orange-600'}`} />
               <h3 className="font-bold text-lg text-gray-800 uppercase tracking-tight">ID Verification *</h3>
             </div>
             
-            <div className="bg-blue-50/50 p-6 rounded-xl border-2 border-dashed border-blue-200">
+            <div className={`bg-${currentCategory === 'document' ? 'blue' : 'orange'}-50/50 p-6 rounded-xl border-2 border-dashed border-${currentCategory === 'document' ? 'blue' : 'orange'}-200`}>
               <div className="flex flex-col items-center justify-center text-center space-y-4">
                 {idPreview ? (
                   <div className="relative w-full max-w-sm">
@@ -421,12 +482,12 @@ export default function ServiceRequestForm({ onBack, residentUser }: { onBack?: 
                   </div>
                 ) : (
                   <>
-                    <div className="p-4 bg-blue-100 rounded-full">
-                      <Upload className="h-10 w-10 text-blue-600" />
+                    <div className={`p-4 bg-${currentCategory === 'document' ? 'blue' : 'orange'}-100 rounded-full`}>
+                      <Upload className={`h-10 w-10 ${currentCategory === 'document' ? 'text-blue-600' : 'text-orange-600'}`} />
                     </div>
                     <div>
-                      <p className="text-blue-900 font-bold">Upload a Valid ID</p>
-                      <p className="text-sm text-blue-700">Required to prevent troll requests. PNG, JPG up to 5MB.</p>
+                      <p className={`text-${currentCategory === 'document' ? 'blue' : 'orange'}-900 font-bold`}>Upload a Valid ID</p>
+                      <p className={`text-sm text-${currentCategory === 'document' ? 'blue' : 'orange'}-700`}>Required to prevent troll requests. PNG, JPG up to 5MB.</p>
                     </div>
                     <Input 
                       type="file" 
@@ -438,7 +499,7 @@ export default function ServiceRequestForm({ onBack, residentUser }: { onBack?: 
                     <Button 
                       type="button" 
                       variant="outline" 
-                      className="border-blue-300 hover:bg-blue-100"
+                      className={`border-${currentCategory === 'document' ? 'blue' : 'orange'}-300 hover:bg-${currentCategory === 'document' ? 'blue' : 'orange'}-100`}
                       onClick={() => document.getElementById('id-upload')?.click()}
                     >
                       Select Image
@@ -463,11 +524,11 @@ export default function ServiceRequestForm({ onBack, residentUser }: { onBack?: 
           {/* Submit Button */}
           <Button 
             type="submit" 
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xl py-8 shadow-md transition-all hover:scale-[1.01] active:scale-[0.99]"
+            className={`w-full ${currentCategory === 'document' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-orange-600 hover:bg-orange-700'} text-white font-bold text-xl py-8 shadow-md transition-all hover:scale-[1.01] active:scale-[0.99]`}
             disabled={isSubmitting}
           >
             <Send className="mr-3 h-6 w-6" />
-            {isSubmitting ? 'SUBMITTING REQUEST...' : 'SUBMIT DOCUMENT REQUEST'}
+            {isSubmitting ? 'SUBMITTING...' : currentCategory === 'document' ? 'SUBMIT DOCUMENT REQUEST' : 'SUBMIT ISSUE REPORT'}
           </Button>
         </form>
       </CardContent>

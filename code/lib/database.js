@@ -10,7 +10,6 @@ import Official from '@/models/Official';
 import Announcement from '@/models/Announcement';
 import DocumentRequest from '@/models/DocumentRequest';
 import ServiceRequest from '@/models/ServiceRequest';
-import Report from '@/models/Report';
 import Reply from '@/models/Reply';
 import bcrypt from 'bcryptjs';
 
@@ -338,7 +337,9 @@ export async function createServiceRequest(requestData) {
     purpose,
     complaintType,
     additionalInfo,
-    idPicture
+    idPicture,
+    location,
+    priority
   } = requestData;
   
   const serviceRequest = await ServiceRequest.create({
@@ -353,6 +354,8 @@ export async function createServiceRequest(requestData) {
     complaintType,
     additionalInfo,
     idPicture,
+    location,
+    priority,
     status: 'pending',
   });
   
@@ -451,132 +454,6 @@ export async function deleteServiceRequest(requestId) {
 }
 
 // ============================================
-// REPORT OPERATIONS
-// ============================================
-
-/**
- * Create a new report
- */
-export async function createReport(reportData) {
-  await dbConnect();
-  
-  const {
-    title,
-    category,
-    description,
-    location,
-    reporterName,
-    reporterEmail,
-    reporterPhone,
-    priority,
-    idPicture
-  } = reportData;
-  
-  const report = await Report.create({
-    title,
-    category,
-    description,
-    location,
-    reporterName,
-    reporterEmail: reporterEmail?.toLowerCase(),
-    reporterPhone,
-    priority: priority || 'medium',
-    idPicture,
-    status: 'open',
-  });
-  
-  return report;
-}
-
-/**
- * Get reports with optional filters
- */
-export async function getReports(filters = {}) {
-  await dbConnect();
-  
-  const query = {};
-  if (filters.status) query.status = filters.status;
-  
-  if (filters.email) {
-    const identifier = filters.email.toLowerCase();
-    const phoneDigits = identifier.replace(/\D/g, '');
-    
-    const orConditions = [
-      { reporterEmail: identifier },
-      { reporterPhone: identifier },
-      { reporterName: { $regex: identifier, $options: 'i' } }
-    ];
-
-    // If it looks like a MongoDB ID
-    if (identifier.match(/^[0-9a-fA-F]{24}$/)) {
-      orConditions.push({ _id: identifier });
-    }
-
-    // Improved phone matching: handle 09, +639, 639 prefixes
-    if (phoneDigits.length >= 7) {
-      // Extract the last 10 digits
-      const last10 = phoneDigits.slice(-10);
-      
-      orConditions.push(
-        { reporterPhone: { $regex: phoneDigits, $options: 'i' } },
-        { reporterPhone: { $regex: last10, $options: 'i' } }
-      );
-      
-      if (phoneDigits.startsWith('63') && phoneDigits.length >= 12) {
-        const leadingZeroVersion = '0' + phoneDigits.slice(2);
-        orConditions.push({ reporterPhone: leadingZeroVersion });
-      } else if (phoneDigits.startsWith('0') && phoneDigits.length === 11) {
-        const plus63Version = '+63' + phoneDigits.slice(1);
-        const nonPlus63Version = '63' + phoneDigits.slice(1);
-        orConditions.push({ reporterPhone: plus63Version }, { reporterPhone: nonPlus63Version });
-      }
-    }
-
-    query.$or = orConditions;
-  }
-  
-  return await Report.find(query).sort({ createdAt: -1 });
-}
-
-/**
- * Update a report
- */
-export async function updateReport(reportId, updateData) {
-  await dbConnect();
-  
-  const updates = {};
-  if (updateData.status) updates.status = updateData.status;
-  if (updateData.response) updates.response = updateData.response;
-  
-  const updatedReport = await Report.findByIdAndUpdate(
-    reportId,
-    updates,
-    { new: true }
-  );
-  
-  if (!updatedReport) {
-    throw new Error('Report not found');
-  }
-  
-  return updatedReport;
-}
-
-/**
- * Delete a report
- */
-export async function deleteReport(reportId) {
-  await dbConnect();
-  
-  const deletedReport = await Report.findByIdAndDelete(reportId);
-  
-  if (!deletedReport) {
-    throw new Error('Report not found');
-  }
-  
-  return { message: 'Report deleted successfully' };
-}
-
-// ============================================
 // REPLY OPERATIONS
 // ============================================
 
@@ -639,11 +516,11 @@ export async function getDashboardStats() {
     pendingServices,
     openReports
   ] = await Promise.all([
-    User.countDocuments(),
+    Resident.countDocuments(),
     Announcement.countDocuments(),
     DocumentRequest.countDocuments({ status: 'pending' }),
-    ServiceRequest.countDocuments({ status: 'pending' }),
-    Report.countDocuments({ status: 'open' })
+    ServiceRequest.countDocuments({ status: 'pending', type: 'document' }),
+    ServiceRequest.countDocuments({ status: 'pending', type: { $ne: 'document' } })
   ]);
   
   return {

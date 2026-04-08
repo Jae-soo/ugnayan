@@ -26,7 +26,6 @@ import {
 } from 'lucide-react'
 import ServiceRequestForm from '@/components/ServiceRequestForm'
 import BlotterForm from '@/components/BlotterForm'
-import ReportForm from '@/components/ReportForm'
 import CommunityMapWrapper from '@/components/CommunityMapWrapper'
 import AnnouncementsBoard from '@/components/AnnouncementsBoard'
 import FeedbackSystem from '@/components/FeedbackSystem'
@@ -203,14 +202,16 @@ export default function UgnayanApp(): React.JSX.Element {
         )
         const notifResults = await Promise.all(notifPromises)
         
-        // 2. Fetch Requests & Reports for Status Changes
-        const [reqRes, repRes] = await Promise.all([
-          fetch(`/api/service-request?email=${encodeURIComponent(residentUser.email || residentUser.id || residentUser.phone)}`),
-          fetch(`/api/reports?email=${encodeURIComponent(residentUser.email || residentUser.id || residentUser.phone)}`)
-        ])
-        
-        const reqJson = await reqRes.json().catch(() => ({ success: false, serviceRequests: [] }))
-        const repJson = await repRes.json().catch(() => ({ success: false, reports: [] }))
+        // 2. Get Requests & Reports from Local Storage for Status Changes
+        const email = residentUser.email || residentUser.id || residentUser.phone
+        const reqJson = { 
+          success: true, 
+          serviceRequests: getUserServiceRequests(email) 
+        }
+        const repJson = { 
+          success: true, 
+          reports: getUserReports(email) 
+        }
         
         const prevMapRaw = localStorage.getItem(`notif_prev:${notifKey(residentUser)}`)
         const prevMap = prevMapRaw ? JSON.parse(prevMapRaw) as Record<string, { status?: string; note?: string }> : {}
@@ -497,7 +498,7 @@ export default function UgnayanApp(): React.JSX.Element {
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           {/* Navigation Tabs */}
-          <TabsList className="grid gap-2 bg-white p-2 shadow-md h-auto grid-cols-4 lg:grid-cols-8">
+          <TabsList className="grid gap-2 bg-white p-2 shadow-md h-auto grid-cols-4 lg:grid-cols-7">
             <TabsTrigger value="home" className="flex flex-col items-center gap-1 py-3">
               <Home className="h-5 w-5" />
               <span className="text-xs">Home</span>
@@ -505,10 +506,6 @@ export default function UgnayanApp(): React.JSX.Element {
             <TabsTrigger value="services" className="flex flex-col items-center gap-1 py-3">
               <FileText className="h-5 w-5" />
               <span className="text-xs">Services</span>
-            </TabsTrigger>
-            <TabsTrigger value="report" className="flex flex-col items-center gap-1 py-3">
-              <AlertTriangle className="h-5 w-5" />
-              <span className="text-xs">Report</span>
             </TabsTrigger>
             <TabsTrigger value="map" className="flex flex-col items-center gap-1 py-3">
               <Map className="h-5 w-5" />
@@ -693,14 +690,7 @@ export default function UgnayanApp(): React.JSX.Element {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid md:grid-cols-3 gap-4">
-                  <div className="flex items-start gap-3">
-                    <Lightbulb className="h-6 w-6 text-yellow-600 mt-1" />
-                    <div>
-                      <h4 className="font-semibold">Streetlight Requests</h4>
-                      <p className="text-sm text-gray-600">Report dark areas needing illumination</p>
-                    </div>
-                  </div>
+                <div className="grid md:grid-cols-2 gap-4">
                   <div className="flex items-start gap-3">
                     <Mountain className="h-6 w-6 text-red-600 mt-1" />
                     <div>
@@ -739,7 +729,15 @@ export default function UgnayanApp(): React.JSX.Element {
                   className={serviceSubTab === 'blotter' ? 'bg-red-700' : ''}
                 >
                   <Shield className="mr-2 h-4 w-4" />
-                  Barangay Blotter
+                  Report Form
+                </Button>
+                <Button 
+                  variant={serviceSubTab === 'report' ? 'default' : 'ghost'}
+                  onClick={() => setServiceSubTab('report')}
+                  className={serviceSubTab === 'report' ? 'bg-orange-600' : ''}
+                >
+                  <AlertTriangle className="mr-2 h-4 w-4" />
+                  Report Issues
                 </Button>
                 <Button 
                   variant={serviceSubTab === 'myrequests' ? 'default' : 'ghost'}
@@ -753,17 +751,14 @@ export default function UgnayanApp(): React.JSX.Element {
             </div>
 
             {serviceSubTab === 'documents' ? (
-              <ServiceRequestForm onBack={() => setActiveTab('home')} residentUser={residentUser} />
+              <ServiceRequestForm onBack={() => setActiveTab('home')} residentUser={residentUser} initialCategory="document" />
             ) : serviceSubTab === 'blotter' ? (
               <BlotterForm onBack={() => setActiveTab('home')} />
+            ) : serviceSubTab === 'report' ? (
+              <ServiceRequestForm onBack={() => setActiveTab('home')} residentUser={residentUser} initialCategory="report" />
             ) : (
               <MyRequests residentUser={residentUser} onBack={() => setActiveTab('home')} />
             )}
-          </TabsContent>
-
-          {/* Report Issues Tab */}
-          <TabsContent value="report">
-            <ReportForm onBack={() => setActiveTab('home')} residentUser={residentUser} />
           </TabsContent>
 
           {/* Community Map Tab */}
@@ -829,7 +824,6 @@ export default function UgnayanApp(): React.JSX.Element {
               <h3 className="font-bold text-lg mb-3">Quick Links</h3>
               <ul className="space-y-2 text-sm text-gray-300">
                 <li className="hover:text-white cursor-pointer" onClick={() => setActiveTab('services')}>Request Services</li>
-                <li className="hover:text-white cursor-pointer" onClick={() => setActiveTab('report')}>Report Issues</li>
                 <li className="hover:text-white cursor-pointer" onClick={() => setActiveTab('emergency')}>Emergency Contacts</li>
                 <li className="hover:text-white cursor-pointer" onClick={() => setActiveTab('feedback')}>Send Feedback</li>
               </ul>

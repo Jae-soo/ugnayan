@@ -92,7 +92,7 @@ export default function ChatbotWidget({ onNavigate }: ChatbotWidgetProps): React
     }
     
     if (lowerMessage.includes('complaint') || lowerMessage.includes('report') || lowerMessage.includes('issue')) {
-      return 'You can report issues or complaints through the Report tab. We handle emergencies, landslides, flooding, streetlight requests, and general complaints.'
+      return 'You can report issues or complaints through the Services tab under "Report Issues". We handle emergencies, landslides, flooding, and general complaints.'
     }
     
     if (lowerMessage.includes('emergency') || lowerMessage.includes('help')) {
@@ -100,7 +100,7 @@ export default function ChatbotWidget({ onNavigate }: ChatbotWidgetProps): React
     }
     
     if (lowerMessage.includes('map') || lowerMessage.includes('location')) {
-      return 'Check out the Map tab to view transportation hubs, streetlight locations, and hazard zones in Barangay Irisan.'
+      return 'Check out the Map tab to view transportation hubs and hazard zones in Barangay Irisan.'
     }
     
     if (lowerMessage.includes('hours') || lowerMessage.includes('time') || lowerMessage.includes('open')) {
@@ -139,7 +139,7 @@ export default function ChatbotWidget({ onNavigate }: ChatbotWidgetProps): React
     }
 
     if (lowerMessage.includes('complaint') || lowerMessage.includes('report') || lowerMessage.includes('issue')) {
-      return { tab: 'report', label: 'Open Report and Emergency tab' }
+      return { tab: 'services', label: 'Open Report Issues form' }
     }
 
     if (lowerMessage.includes('emergency') || lowerMessage.includes('help')) {

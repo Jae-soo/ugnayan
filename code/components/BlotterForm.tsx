@@ -108,7 +108,7 @@ export default function BlotterForm({ onBack }: { onBack?: () => void }): React.
       saveBlotter(blotterRecord)
       try { window.dispatchEvent(new Event('barangay_blotters_updated')) } catch {}
 
-      toast.success('Barangay Blotter submitted!', {
+      toast.success('Report submitted!', {
         description: `Reference ID: ${referenceId}. An official will verify your ID and contact you.`,
         duration: 8000
       })
@@ -134,8 +134,8 @@ export default function BlotterForm({ onBack }: { onBack?: () => void }): React.
       })
       setIdPreview(null)
     } catch (error) {
-      console.error('Error submitting blotter:', error)
-      toast.error('Failed to submit blotter. Please try again.')
+      console.error('Error submitting report:', error)
+      toast.error('Failed to submit report. Please try again.')
     } finally {
       setIsSubmitting(false)
     }
@@ -160,7 +160,7 @@ export default function BlotterForm({ onBack }: { onBack?: () => void }): React.
             <ShieldAlert className="h-8 w-8" />
           </div>
           <div>
-            <CardTitle className="text-2xl uppercase tracking-wider">Barangay Blotter Form</CardTitle>
+            <CardTitle className="text-2xl uppercase tracking-wider">Official Report Form</CardTitle>
             <CardDescription className="text-red-100 font-medium">
               Official Incident Reporting - Barangay Irisan, Baguio City
             </CardDescription>
@@ -170,11 +170,11 @@ export default function BlotterForm({ onBack }: { onBack?: () => void }): React.
       <CardContent className="pt-8 px-6 md:px-10">
         <form onSubmit={handleSubmit} className="space-y-10">
           
-          {/* Section 1: Blotter Entry Information */}
+          {/* Section 1: Report Information */}
           <div className="space-y-6">
             <div className="flex items-center gap-2 border-b-2 border-red-100 pb-2">
               <Info className="h-5 w-5 text-red-700" />
-              <h3 className="font-bold text-lg text-gray-800 uppercase tracking-tight">Blotter Entry Information</h3>
+              <h3 className="font-bold text-lg text-gray-800 uppercase tracking-tight">Report Information</h3>
             </div>
             
             <div className="grid md:grid-cols-2 gap-6">
@@ -498,7 +498,7 @@ export default function BlotterForm({ onBack }: { onBack?: () => void }): React.
             <ul className="text-sm text-red-800 space-y-2 font-medium">
               <li className="flex items-start gap-2">
                 <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-red-600 shrink-0" />
-                Providing false information in an official blotter report is subject to legal action under Article 183 of the Revised Penal Code (Perjury).
+                Providing false information in an official report is subject to legal action under Article 183 of the Revised Penal Code (Perjury).
               </li>
               <li className="flex items-start gap-2">
                 <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-red-600 shrink-0" />
@@ -518,7 +518,7 @@ export default function BlotterForm({ onBack }: { onBack?: () => void }): React.
             disabled={isSubmitting}
           >
             <Send className="mr-3 h-6 w-6" />
-            {isSubmitting ? 'PROCESSING SUBMISSION...' : 'SUBMIT OFFICIAL BLOTTER'}
+            {isSubmitting ? 'PROCESSING SUBMISSION...' : 'SUBMIT OFFICIAL REPORT'}
           </Button>
         </form>
       </CardContent>

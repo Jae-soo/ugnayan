@@ -112,41 +112,31 @@ export default function AdminDashboard({ officialInfo }: AdminDashboardProps): R
     let remoteReports: Report[] = []
 
     try {
-      const [reqRes, repRes] = await Promise.all([
-        fetch('/api/service-request'),
-        fetch('/api/reports')
+      const [reqRes] = await Promise.all([
+        fetch('/api/service-request')
       ])
       if (reqRes.ok) {
         const reqJson = await reqRes.json()
         const apiRequests = (reqJson.requests || []) as Array<{ _id: string; residentName: string; residentEmail: string; residentPhone: string; residentAddress?: string; documentType?: string; type?: string; purpose?: string; status: ServiceRequest['status']; createdAt: string; additionalInfo?: string }>
-        remoteRequests = apiRequests.map((r) => ({
+        
+        const allUnified = apiRequests.map((r) => ({
           referenceId: r._id,
           fullName: r.residentName,
           email: r.residentEmail,
           phone: r.residentPhone,
-          address: r.residentAddress || '',
+          address: r.residentAddress || (r as any).location || '',
           documentType: r.documentType || r.type || '',
-          purpose: r.purpose || '',
+          purpose: r.purpose || (r as any).description || '',
           status: r.status,
           submittedAt: r.createdAt,
-          additionalInfo: r.additionalInfo || ''
+          additionalInfo: r.additionalInfo || '',
+          location: (r as any).location,
+          priority: (r as any).priority,
+          reportType: r.type !== 'document' ? r.type as any : undefined
         }))
-      }
-      if (repRes.ok) {
-        const repJson = await repRes.json()
-        const apiReports = (repJson.reports || []) as Array<{ _id: string; category: Report['reportType']; priority: Report['priority']; reporterName: string; reporterEmail: string; reporterPhone?: string; location?: string; description: string; status: Report['status'] | 'open'; createdAt: string }>
-        remoteReports = apiReports.map((r) => ({
-          referenceId: r._id,
-          reportType: r.category,
-          priority: r.priority,
-          fullName: r.reporterName,
-          email: r.reporterEmail,
-          phone: r.reporterPhone || '',
-          location: r.location || '',
-          description: r.description,
-          status: r.status === 'open' ? 'pending' : r.status,
-          submittedAt: r.createdAt
-        }))
+
+        remoteRequests = allUnified.filter(r => r.reportType === undefined)
+        remoteReports = allUnified.filter(r => r.reportType !== undefined)
       }
     } catch {}
 
@@ -216,6 +206,11 @@ export default function AdminDashboard({ officialInfo }: AdminDashboardProps): R
     updateReportStatus(referenceId, newStatus)
     loadData()
     toast.success(`Report ${referenceId} updated to ${newStatus}`)
+    void fetch('/api/service-request', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: referenceId, status: newStatus })
+    }).catch(() => {})
   }
 
   const handleCreateAnnouncement = (): Promise<void> | void => {

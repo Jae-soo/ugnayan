@@ -2,7 +2,7 @@ import mongoose, { Schema, type Document } from 'mongoose';
 
 export interface IServiceRequest extends Document {
   _id: mongoose.Types.ObjectId;
-  type: 'document' | 'service' | 'complaint';
+  type: 'document' | 'service' | 'complaint' | 'emergency' | 'landslide' | 'flooding' | 'road-issue' | 'other';
   description: string;
   residentName: string;
   residentEmail: string;
@@ -12,17 +12,19 @@ export interface IServiceRequest extends Document {
   purpose?: string;
   complaintType?: string;
   additionalInfo?: string;
-  status: 'pending' | 'in-progress' | 'ready' | 'completed' | 'rejected';
+  status: 'pending' | 'in-progress' | 'ready' | 'completed' | 'rejected' | 'resolved' | 'open';
   adminNotes?: string;
   createdAt: Date;
   updatedAt: Date;
+  location?: string;
+  priority?: 'low' | 'medium' | 'high';
+  idPicture?: string;
 }
 
 const ServiceRequestSchema: Schema = new Schema(
   {
     type: {
       type: String,
-      enum: ['document', 'service', 'complaint'],
       required: true,
     },
     description: {
@@ -63,7 +65,6 @@ const ServiceRequestSchema: Schema = new Schema(
     },
     status: {
       type: String,
-      enum: ['pending', 'in-progress', 'ready', 'completed', 'rejected'],
       default: 'pending',
     },
     adminNotes: {
@@ -73,6 +74,15 @@ const ServiceRequestSchema: Schema = new Schema(
     idPicture: {
       type: String,
       required: false,
+    },
+    location: {
+      type: String,
+      required: false,
+    },
+    priority: {
+      type: String,
+      enum: ['low', 'medium', 'high'],
+      default: 'medium',
     },
   },
   {

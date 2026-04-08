@@ -33,11 +33,11 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { type, description, residentName, residentEmail, residentPhone, residentAddress, documentType, purpose, complaintType, additionalInfo, idPicture } = body
+    const { type, description, residentName, residentEmail, residentPhone, residentAddress, documentType, purpose, complaintType, additionalInfo, idPicture, location, priority } = body
     if (!type || !description || !residentName) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
-    const serviceRequest = await createServiceRequest({ type, description, residentName, residentEmail, residentPhone, residentAddress, documentType, purpose, complaintType, additionalInfo, idPicture })
+    const serviceRequest = await createServiceRequest({ type, description, residentName, residentEmail, residentPhone, residentAddress, documentType, purpose, complaintType, additionalInfo, idPicture, location, priority })
     return NextResponse.json({ message: 'Service request created successfully', request: serviceRequest }, { status: 201 })
   } catch (error) {
     return NextResponse.json({ error: 'Failed to create service request' }, { status: 500 })

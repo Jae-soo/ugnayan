@@ -37,7 +37,7 @@ interface Location {
   name: string
   lat: number
   lng: number
-  type: 'transportation' | 'streetlight' | 'hazard' | 'business' | 'tourist' | 'evacuation' | 'church' | 'school' | 'office' | 'gas_station' | 'barangay_hall'
+  type: 'transportation' | 'hazard' | 'business' | 'tourist' | 'evacuation' | 'church' | 'school' | 'office' | 'gas_station' | 'barangay_hall'
   description: string
   address: string
   status?: string
@@ -75,7 +75,6 @@ const getMarkerIcon = (type: string, name?: string): L.Icon | L.DivIcon => {
 
   const iconColors: { [key: string]: string } = {
     transportation: 'blue',
-    streetlight: 'yellow',
     hazard: 'red',
     tourist: 'orange',
     evacuation: 'violet',
@@ -776,10 +775,6 @@ export default function CommunityMap({ onBack }: { onBack?: () => void }): React
               <div className="w-4 h-4 bg-blue-500 rounded-full"></div>
               <span>Transportation</span>
             </div>
-            <div className={`flex items-center gap-2 cursor-pointer p-1 rounded-md ${filter === 'streetlight' ? 'bg-yellow-100' : ''}`} onClick={() => setFilter('streetlight')}>
-              <div className="w-4 h-4 bg-yellow-500 rounded-full"></div>
-              <span>Streetlights</span>
-            </div>
             <div className={`flex items-center gap-2 cursor-pointer p-1 rounded-md ${filter === 'hazard' ? 'bg-red-100' : ''}`} onClick={() => setFilter('hazard')}>
               <div className="w-4 h-4 bg-red-500 rounded-full"></div>
               <span>Hazard Zones</span>
@@ -854,12 +849,6 @@ export default function CommunityMap({ onBack }: { onBack?: () => void }): React
                     <div className="flex items-center gap-2">
                       <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
                       <span>Transportation</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="streetlight">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
-                      <span>Streetlight</span>
                     </div>
                   </SelectItem>
                   <SelectItem value="hazard">
@@ -1001,25 +990,6 @@ export default function CommunityMap({ onBack }: { onBack?: () => void }): React
                 <h4 className="font-semibold text-gray-800">{location.name}</h4>
                 <p className="text-sm text-gray-600">{location.description}</p>
                 <p className="text-sm text-gray-600">{location.address}</p>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        {/* Streetlights List */}
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h3 className="text-xl font-bold text-yellow-600 mb-4 flex items-center gap-2">
-            💡 Streetlight Locations
-          </h3>
-          <ul className="space-y-3">
-            {filteredLocations.filter(loc => loc.type === 'streetlight').map((location) => (
-              <li key={location.id} className="border-l-4 border-yellow-500 pl-3 py-2">
-                <h4 className="font-semibold text-gray-800">{location.name}</h4>
-                <p className="text-sm text-gray-600">{location.description}</p>
-                <p className="text-sm text-gray-600">{location.address}</p>
-                <p className={`text-xs font-semibold mt-1 ${location.status === 'Functional' ? 'text-green-600' : 'text-red-600'}`}>
-                  Status: {location.status}
-                </p>
               </li>
             ))}
           </ul>

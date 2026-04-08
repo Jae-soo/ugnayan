@@ -121,9 +121,8 @@ export enum ReportType {
   Emergency = 0,
   Landslide = 1,
   Flooding = 2,
-  Streetlight = 3,
-  RoadIssue = 4,
-  Other = 5
+  RoadIssue = 3,
+  Other = 4
 }
 
 export enum ReportStatus {

@@ -25,12 +25,12 @@ import {
   TrendingUp
 } from 'lucide-react'
 import ServiceRequestForm from '@/components/ServiceRequestForm'
-import ReportForm from '@/components/ReportForm'
+import MyRequests from '@/components/MyRequests'
+import BlotterForm from '@/components/BlotterForm'
 import CommunityMap from '@/components/CommunityMap'
 import AnnouncementsBoard from '@/components/AnnouncementsBoard'
 import FeedbackSystem from '@/display/FeedbackSystem'
 import EmergencyContacts from '@/display/EmergencyContacts'
-import MyRequests from '@/components/MyRequests'
 import RealTimeClock from '@/components/RealTimeClock'
 import ChatbotWidget from '@/components/ChatbotWidget'
 import UserRegistration from '@/components/UserRegistration'
@@ -246,6 +246,7 @@ export default function UgnayanAppWithAuth(): React.JSX.Element {
   const { connected, userProfile, statusMessage, logoutUser } = useSpacetimeDB()
   const { notifications, markAllRead, clearAll } = useNotifications()
   const [activeTab, setActiveTab] = useState<string>('home')
+  const [serviceSubTab, setServiceSubTab] = useState<'documents' | 'report' | 'myrequests'>('documents')
   const [showNotificationCenter, setShowNotificationCenter] = useState<boolean>(false)
   const [loginOpen, setLoginOpen] = useState<boolean>(false)
   // Removed official login modal for residents
@@ -348,7 +349,7 @@ export default function UgnayanAppWithAuth(): React.JSX.Element {
         ) : (
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           {/* Navigation Tabs */}
-          <TabsList className={`grid gap-2 bg-white p-2 shadow-md h-auto grid-cols-4 lg:grid-cols-9`}>
+          <TabsList className="grid gap-2 bg-white p-2 shadow-md h-auto grid-cols-4 lg:grid-cols-7">
             <TabsTrigger value="home" className="flex flex-col items-center gap-1 py-3">
               <Home className="h-5 w-5" />
               <span className="text-xs">Home</span>
@@ -356,10 +357,6 @@ export default function UgnayanAppWithAuth(): React.JSX.Element {
             <TabsTrigger value="services" className="flex flex-col items-center gap-1 py-3">
               <FileText className="h-5 w-5" />
               <span className="text-xs">Services</span>
-            </TabsTrigger>
-            <TabsTrigger value="report" className="flex flex-col items-center gap-1 py-3">
-              <AlertTriangle className="h-5 w-5" />
-              <span className="text-xs">Report</span>
             </TabsTrigger>
             <TabsTrigger value="map" className="flex flex-col items-center gap-1 py-3">
               <Map className="h-5 w-5" />
@@ -426,13 +423,6 @@ export default function UgnayanAppWithAuth(): React.JSX.Element {
                   >
                     Request Services
                   </Button>
-                  <Button 
-                    variant="secondary" 
-                    onClick={() => setActiveTab('report')}
-                    className="bg-green-800 text-white hover:bg-green-900"
-                  >
-                    Report an Issue
-                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -440,7 +430,7 @@ export default function UgnayanAppWithAuth(): React.JSX.Element {
             {/* Quick Services */}
             <div>
               <h2 className="text-2xl font-bold mb-4 text-gray-800">Quick Access Services</h2>
-              <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
                 <Card 
                   className="cursor-pointer hover:shadow-lg transition-all hover:scale-105"
                   onClick={() => setActiveTab('services')}
@@ -458,21 +448,6 @@ export default function UgnayanAppWithAuth(): React.JSX.Element {
 
                 <Card 
                   className="cursor-pointer hover:shadow-lg transition-all hover:scale-105"
-                  onClick={() => setActiveTab('report')}
-                >
-                  <CardHeader>
-                    <AlertTriangle className="h-10 w-10 text-orange-600 mb-2" />
-                    <CardTitle className="text-lg">Report Issues</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-gray-600">
-                      File complaints, report emergencies, or hazards in the area
-                    </p>
-                  </CardContent>
-                </Card>
-
-                <Card 
-                  className="cursor-pointer hover:shadow-lg transition-all hover:scale-105"
                   onClick={() => setActiveTab('map')}
                 >
                   <CardHeader>
@@ -481,7 +456,7 @@ export default function UgnayanAppWithAuth(): React.JSX.Element {
                   </CardHeader>
                   <CardContent>
                     <p className="text-sm text-gray-600">
-                      View transportation, streetlights, and hazard zones
+                      View transportation and hazard zones
                     </p>
                   </CardContent>
                 </Card>
@@ -553,14 +528,7 @@ export default function UgnayanAppWithAuth(): React.JSX.Element {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid md:grid-cols-3 gap-4">
-                  <div className="flex items-start gap-3">
-                    <Lightbulb className="h-6 w-6 text-yellow-600 mt-1" />
-                    <div>
-                      <h4 className="font-semibold">Streetlight Requests</h4>
-                      <p className="text-sm text-gray-600">Report dark areas needing illumination</p>
-                    </div>
-                  </div>
+                <div className="grid md:grid-cols-2 gap-4">
                   <div className="flex items-start gap-3">
                     <Mountain className="h-6 w-6 text-red-600 mt-1" />
                     <div>
@@ -581,8 +549,45 @@ export default function UgnayanAppWithAuth(): React.JSX.Element {
           </TabsContent>
 
           {/* Other Tabs */}
-          <TabsContent value="services"><ServiceRequestForm /></TabsContent>
-          <TabsContent value="report"><ReportForm /></TabsContent>
+          <TabsContent value="services" className="space-y-6">
+            <div className="flex flex-col items-center justify-center mb-6">
+              <h2 className="text-2xl font-bold text-gray-800 mb-4">Select Service Type</h2>
+              <div className="inline-flex p-1 bg-gray-100 rounded-lg border border-gray-200">
+                <Button 
+                  variant={serviceSubTab === 'documents' ? 'default' : 'ghost'}
+                  onClick={() => setServiceSubTab('documents')}
+                  className={serviceSubTab === 'documents' ? 'bg-blue-600' : ''}
+                >
+                  <FileText className="mr-2 h-4 w-4" />
+                  Document Requests
+                </Button>
+                <Button 
+                  variant={serviceSubTab === 'report' ? 'default' : 'ghost'}
+                  onClick={() => setServiceSubTab('report')}
+                  className={serviceSubTab === 'report' ? 'bg-orange-600' : ''}
+                >
+                  <AlertTriangle className="mr-2 h-4 w-4" />
+                  Report Issues
+                </Button>
+                <Button 
+                  variant={serviceSubTab === 'myrequests' ? 'default' : 'ghost'}
+                  onClick={() => setServiceSubTab('myrequests')}
+                  className={serviceSubTab === 'myrequests' ? 'bg-indigo-600' : ''}
+                >
+                  <Search className="mr-2 h-4 w-4" />
+                  My Requests
+                </Button>
+              </div>
+            </div>
+
+            {serviceSubTab === 'documents' ? (
+              <ServiceRequestForm onBack={() => setActiveTab('home')} residentUser={userProfile} initialCategory="document" />
+            ) : serviceSubTab === 'report' ? (
+              <ServiceRequestForm onBack={() => setActiveTab('home')} residentUser={userProfile} initialCategory="report" />
+            ) : (
+              <MyRequests residentUser={userProfile} onBack={() => setActiveTab('home')} />
+            )}
+          </TabsContent>
           <TabsContent value="map"><CommunityMap /></TabsContent>
           <TabsContent value="announcements"><AnnouncementsBoard /></TabsContent>
           <TabsContent value="feedback"><FeedbackSystem /></TabsContent>
@@ -637,7 +642,6 @@ export default function UgnayanAppWithAuth(): React.JSX.Element {
               <h3 className="font-bold text-lg mb-3">Quick Links</h3>
               <ul className="space-y-2 text-sm text-gray-300">
                 <li className="hover:text-white cursor-pointer" onClick={() => setActiveTab('services')}>Request Services</li>
-                <li className="hover:text-white cursor-pointer" onClick={() => setActiveTab('report')}>Report Issues</li>
                 <li className="hover:text-white cursor-pointer" onClick={() => setActiveTab('emergency')}>Emergency Contacts</li>
                 <li className="hover:text-white cursor-pointer" onClick={() => setActiveTab('feedback')}>Send Feedback</li>
               </ul>

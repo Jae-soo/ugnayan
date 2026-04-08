@@ -3,7 +3,6 @@ import type { Complaint, DocumentRequest, ServiceRequest, Report, Blotter, Reply
 const COMPLAINTS_KEY = 'barangay_complaints';
 const DOCUMENTS_KEY = 'barangay_documents';
 const SERVICE_REQUESTS_KEY = 'barangay_service_requests';
-const REPORTS_KEY = 'barangay_reports';
 const BLOTTERS_KEY = 'barangay_blotters';
 const REPLIES_KEY = 'barangay_replies';
 const SYNC_MAP_KEY = 'barangay_sync_map';
@@ -19,7 +18,6 @@ const cleanUpOldData = (aggressive: boolean = false): void => {
     REPLIES_KEY,
     SERVICE_REQUESTS_KEY,
     BLOTTERS_KEY,
-    REPORTS_KEY,
     DOCUMENTS_KEY,
     COMPLAINTS_KEY
   ];
@@ -221,16 +219,14 @@ export const updateServiceRequestStatus = (referenceId: string, status: string):
 };
 
 export const getReports = (): Report[] => {
-  if (typeof window === 'undefined') return [];
-  const data = localStorage.getItem(REPORTS_KEY);
-  return data ? JSON.parse(data) : [];
-};
+  const reqs = getServiceRequests()
+  return reqs.filter(r => (r as any).reportType !== undefined) as Report[]
+}
+
+export const getLocalReports = getReports;
 
 export const saveReport = (report: Report): void => {
-  if (typeof window === 'undefined') return;
-  const reports = getReports();
-  reports.push(report);
-  safeSetItem(REPORTS_KEY, JSON.stringify(reports));
+  saveServiceRequest(report as any)
 };
 
 export const getBlotters = (): Blotter[] => {
@@ -255,14 +251,11 @@ export const updateBlotterStatus = (referenceId: string, status: string): void =
   safeSetItem(BLOTTERS_KEY, JSON.stringify(updated));
 };
 
-export const updateReportStatus = (referenceId: string, status: string): void => {
-  if (typeof window === 'undefined') return;
-  const reports = getReports();
-  const updated = reports.map((rep) =>
-    rep.referenceId === referenceId ? { ...rep, status } : rep
-  );
-  safeSetItem(REPORTS_KEY, JSON.stringify(updated));
-};
+export const updateReportStatus = (referenceId: string, newStatus: string): void => {
+  updateServiceRequestStatus(referenceId, newStatus)
+}
+
+export const updateLocalReportStatus = updateReportStatus;
 
 export const getSyncMap = (): Record<string, { type: 'service' | 'report'; serverId: string }> => {
   if (typeof window === 'undefined') return {};
@@ -289,23 +282,24 @@ export const removeSyncMapEntry = (referenceId: string): void => {
   safeSetItem(SYNC_MAP_KEY, JSON.stringify(map));
 };
 
-export const getUserServiceRequests = (identifier: string): ServiceRequest[] => {
-  return getServiceRequests().filter((r) => 
-    r.email === identifier || 
-    r.phone === identifier || 
-    r.fullName === identifier ||
-    (r.phone && r.phone.replace(/\D/g, '') === identifier.replace(/\D/g, ''))
-  );
-};
+export const getUserServiceRequests = (emailOrPhone: string): ServiceRequest[] => {
+  const reqs = getServiceRequests()
+  return reqs.filter(r => 
+    r.email?.toLowerCase() === emailOrPhone.toLowerCase() || 
+    r.phone === emailOrPhone ||
+    r.fullName.toLowerCase() === emailOrPhone.toLowerCase()
+  )
+}
 
-export const getUserReports = (identifier: string): Report[] => {
-  return getReports().filter((r) => 
-    r.email === identifier || 
-    r.phone === identifier || 
-    r.fullName === identifier ||
-    (r.phone && r.phone.replace(/\D/g, '') === identifier.replace(/\D/g, ''))
-  );
-};
+export const getUserReports = (emailOrPhone: string): Report[] => {
+  const reqs = getServiceRequests()
+  return reqs.filter(r => 
+    (r.email?.toLowerCase() === emailOrPhone.toLowerCase() || 
+    r.phone === emailOrPhone ||
+    r.fullName.toLowerCase() === emailOrPhone.toLowerCase()) &&
+    (r as any).reportType !== undefined
+  ) as Report[]
+}
 
 export const getUserBlotters = (identifier: string): Blotter[] => {
   return getBlotters().filter((b) => 

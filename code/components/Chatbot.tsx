@@ -65,7 +65,7 @@ export default function Chatbot() {
     }
 
     if (lowerMessage.includes('complaint') || lowerMessage.includes('report') || lowerMessage.includes('issue') || lowerMessage.includes('problem')) {
-      return "To file a report or complaint:\n\n1. Visit the 'Report & Emergency' tab\n2. Choose your report type (Emergency, Landslide, Flooding, Streetlight, Infrastructure)\n3. Provide detailed information and location\n4. Select priority level if urgent\n5. Submit with your contact details\n\nFor life-threatening emergencies, please call our hotline: (074) 442-7728 immediately!"
+      return "To file a report or complaint:\n\n1. Visit the 'Services' tab\n2. Select 'Report Issues'\n3. Choose your report type (Emergency, Landslide, Flooding, Infrastructure)\n4. Provide detailed information and location\n5. Select priority level if urgent\n6. Submit with your contact details\n\nFor life-threatening emergencies, please call our hotline: (074) 442-7728 immediately!"
     }
 
     if (lowerMessage.includes('hour') || lowerMessage.includes('time') || lowerMessage.includes('open') || lowerMessage.includes('schedule')) {
@@ -77,7 +77,7 @@ export default function Chatbot() {
     }
 
     if (lowerMessage.includes('map') || lowerMessage.includes('location') || lowerMessage.includes('transportation') || lowerMessage.includes('business')) {
-      return "🗺️ Our Community Map features:\n\n• Public Transportation (jeepney terminals, tricycle stations, bus stops)\n• Streetlight Locations & Status\n• Hazard Zones (landslide areas, flood zones)\n• Local Businesses & Services\n\nGo to the 'Map' tab to explore interactive markers. Click on any marker to see detailed information about that location. The map helps you navigate Barangay Irisan and stay informed about community resources!"
+      return "🗺️ Our Community Map features:\n\n• Public Transportation (jeepney terminals, tricycle stations, bus stops)\n• Hazard Zones (landslide areas, flood zones)\n• Local Businesses & Services\n\nGo to the 'Map' tab to explore interactive markers. Click on any marker to see detailed information about that location. The map helps you navigate Barangay Irisan and stay informed about community resources!"
     }
 
     if (lowerMessage.includes('track') || lowerMessage.includes('status') || lowerMessage.includes('reference')) {

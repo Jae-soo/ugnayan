@@ -29,24 +29,15 @@ export interface ServiceRequest {
   documentType: string;
   purpose: string;
   additionalInfo?: string;
-  status: 'pending' | 'processing' | 'ready_for_pickup' | 'completed' | 'rejected' | 'ready' | 'in-progress';
+  status: 'pending' | 'processing' | 'ready_for_pickup' | 'completed' | 'rejected' | 'ready' | 'in-progress' | 'resolved';
   submittedAt: string;
   idPicture?: string; // Base64 or URL
+  location?: string;
+  reportType?: 'emergency' | 'landslide' | 'flooding' | 'road-issue' | 'other';
+  priority?: 'low' | 'medium' | 'high';
 }
 
-export interface Report {
-  referenceId: string;
-  reportType: 'emergency' | 'landslide' | 'flooding' | 'streetlight' | 'road-issue' | 'other';
-  priority: 'low' | 'medium' | 'high';
-  fullName: string;
-  email: string;
-  phone: string;
-  location: string;
-  description: string;
-  status: 'pending' | 'in-progress' | 'resolved' | 'rejected';
-  submittedAt: string;
-  idPicture?: string; // Base64 or URL
-}
+export interface Report extends ServiceRequest {}
 
 export interface Blotter {
   referenceId: string;

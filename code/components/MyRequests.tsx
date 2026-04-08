@@ -119,17 +119,15 @@ export default function MyRequests({ residentUser, onBack }: { residentUser?: an
 
       await Promise.all(ids.map(async (identifier) => {
         try {
-          const [reqRes, repRes] = await Promise.all([
-            fetch(`/api/service-request?email=${encodeURIComponent(identifier)}`),
-            fetch(`/api/reports?email=${encodeURIComponent(identifier)}`)
+          const [reqRes] = await Promise.all([
+            fetch(`/api/service-request?email=${encodeURIComponent(identifier)}`)
           ])
           const reqJson = await reqRes.json()
-          const repJson = await repRes.json()
           
           // 1. Fetch from API
           if (reqRes.ok && reqJson.success) {
             const items = reqJson.serviceRequests || reqJson.requests || []
-            const mapped = await Promise.all((items as ApiServiceRequest[]).map(async (r) => {
+            await Promise.all((items as ApiServiceRequest[]).map(async (r) => {
               let replies = getRepliesForReference(r._id)
               try {
                 const replyRes = await fetch(`/api/replies?referenceId=${r._id}`)
@@ -139,22 +137,34 @@ export default function MyRequests({ residentUser, onBack }: { residentUser?: an
                 }
               } catch {}
 
-              return {
+              const commonData = {
                 id: r._id,
                 fullName: r.residentName,
                 email: r.residentEmail,
                 phone: r.residentPhone,
-                address: r.residentAddress || '',
+                address: r.residentAddress || (r as any).location || '',
                 documentType: r.documentType || r.type || '',
-                purpose: r.purpose || '',
+                purpose: r.purpose || (r as any).description || '',
                 additionalInfo: r.additionalInfo || '',
                 status: r.status,
                 submittedAt: r.createdAt,
                 adminNotes: r.adminNotes || '',
                 replies
               }
+
+              // If it's a report (type is not 'document')
+              if (r.type !== 'document' && r.type !== undefined) {
+                uniqueReports.set(r._id, {
+                  ...commonData,
+                  location: (r as any).location || r.residentAddress || '',
+                  reportType: r.type,
+                  priority: (r as any).priority || 'medium',
+                  description: r.purpose || (r as any).description || ''
+                })
+              } else {
+                uniqueRequests.set(r._id, commonData)
+              }
             }))
-            mapped.forEach(r => uniqueRequests.set(r.id, r))
           }
 
           // 2. ALWAYS also check local storage for this identifier to merge
@@ -189,41 +199,11 @@ export default function MyRequests({ residentUser, onBack }: { residentUser?: an
             }
           })
 
-          if (repRes.ok && repJson.success) {
-            const items = repJson.reports || []
-            const mapped = await Promise.all((items as ApiReport[]).map(async (r) => {
-              let replies = getRepliesForReference(r._id)
-              try {
-                const replyRes = await fetch(`/api/replies?referenceId=${r._id}`)
-                const replyJson = await replyRes.json()
-                if (replyJson.success && replyJson.replies) {
-                  replies = replyJson.replies
-                }
-              } catch {}
-
-              return {
-                id: r._id,
-                fullName: r.reporterName,
-                email: r.reporterEmail,
-                phone: r.reporterPhone || '',
-                location: r.location || '',
-                reportType: r.category,
-                priority: r.priority,
-                description: r.description,
-                status: r.status === 'open' ? 'pending' : r.status,
-                submittedAt: r.createdAt,
-                response: r.response || '',
-                replies
-              }
-            }))
-            mapped.forEach(r => uniqueReports.set(r.id, r))
-          }
-
           // Merge local reports
           const localReps = await Promise.all(getUserReports(identifier).map(async (r) => {
-            let replies = getRepliesForReference(r.referenceId)
+            let replies = getRepliesForReference(r.id)
             try {
-              const replyRes = await fetch(`/api/replies?referenceId=${r.referenceId}`)
+              const replyRes = await fetch(`/api/replies?referenceId=${r.id}`)
               const replyJson = await replyRes.json()
               if (replyJson.success && replyJson.replies) {
                 replies = replyJson.replies
@@ -231,7 +211,7 @@ export default function MyRequests({ residentUser, onBack }: { residentUser?: an
             } catch {}
 
             return {
-              id: r.referenceId,
+              id: r.id,
               fullName: r.fullName,
               email: r.email,
               phone: r.phone || '',
