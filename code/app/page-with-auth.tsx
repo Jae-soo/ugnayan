@@ -22,7 +22,8 @@ import {
   LogIn,
   UserCircle,
   LogOut,
-  TrendingUp
+  TrendingUp,
+  Search
 } from 'lucide-react'
 import ServiceRequestForm from '@/components/ServiceRequestForm'
 import MyRequests from '@/components/MyRequests'
