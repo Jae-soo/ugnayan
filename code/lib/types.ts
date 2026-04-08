@@ -33,6 +33,7 @@ export interface ServiceRequest {
   documentType: string;
   purpose: string;
   additionalInfo?: string;
+  description?: string;
   adminNotes?: string;
   response?: string;
   status: 'pending' | 'processing' | 'ready_for_pickup' | 'completed' | 'rejected' | 'ready' | 'in-progress' | 'resolved';

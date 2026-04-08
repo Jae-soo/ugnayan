@@ -310,16 +310,17 @@ export default function AdminDashboard({ officialInfo }: AdminDashboardProps): R
     )
   }
 
-  const getPriorityBadge = (priority: string): React.JSX.Element => {
+  const getPriorityBadge = (priority?: string): React.JSX.Element => {
     const colors: Record<string, string> = {
       'low': 'bg-gray-100 text-gray-800',
       'medium': 'bg-yellow-100 text-yellow-800',
       'high': 'bg-red-100 text-red-800'
     }
 
+    const p = priority || 'low'
     return (
-      <Badge className={colors[priority] || colors['low']}>
-        {priority}
+      <Badge className={colors[p] || colors['low']}>
+        {p}
       </Badge>
     )
   }
