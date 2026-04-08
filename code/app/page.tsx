@@ -106,7 +106,7 @@ export default function UgnayanApp(): React.JSX.Element {
     }, []);
   const [activeTab, setActiveTab] = useState<string>('home')
   const [showNotificationCenter, setShowNotificationCenter] = useState<boolean>(false)
-  const [serviceSubTab, setServiceSubTab] = useState<'documents' | 'blotter' | 'myrequests'>('documents')
+  const [serviceSubTab, setServiceSubTab] = useState<'documents' | 'blotter' | 'report' | 'myrequests'>('documents')
   const [loginOpen, setLoginOpen] = useState<boolean>(false)
   const [loggedInOfficial, setLoggedInOfficial] = useState<{ username: string; role: string; name: string } | null>(null)
   const [showWelcome, setShowWelcome] = useState<boolean>(true)
