@@ -417,20 +417,19 @@ export default function UgnayanApp(): React.JSX.Element {
       ) : (
     <div className="min-h-screen bg-gradient-to-br from-green-50 via-blue-50 to-green-50">
       {/* Header */}
-      <header className="bg-gradient-to-r from-green-600 to-green-700 text-white shadow-lg sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4 md:py-6">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+      <header className="bg-gradient-to-r from-green-600 to-green-700 text-white shadow-lg">
+        <div className="container mx-auto px-4 py-6">
+          <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <Shield className="h-6 w-6 md:h-8 md:w-8 text-white opacity-90" />
+              <Shield className="h-8 w-8 text-white opacity-90" />
               <div>
-                <h1 className="text-xl md:text-3xl font-bold">Ugnayan</h1>
-                <p className="text-green-100 text-[10px] md:text-sm">Barangay Irisan Service Portal</p>
+                <h1 className="text-3xl font-bold">Ugnayan</h1>
+                <p className="text-green-100 text-sm">Barangay Irisan Service Portal</p>
               </div>
             </div>
-            <div className="flex items-center gap-2 md:gap-3 w-full sm:w-auto justify-center sm:justify-end">
-              <div className="hidden md:block">
-                <RealTimeClock />
-              </div>
+            <div className="flex items-center gap-3">
+              <span className="text-white/90 text-sm">Baguio City</span>
+              <RealTimeClock />
               <NotificationsBell
                 notifications={notifications}
                 onMarkAllRead={markAllNotificationsRead}
@@ -439,11 +438,11 @@ export default function UgnayanApp(): React.JSX.Element {
               />
               {residentUser ? (
                 <DropdownMenu>
-                  <DropdownMenuTrigger className="flex items-center gap-2 focus:outline-none max-w-[150px]">
-                    <Avatar className="h-8 w-8 shrink-0">
+                  <DropdownMenuTrigger className="flex items-center gap-2 focus:outline-none">
+                    <Avatar className="h-8 w-8">
                       <AvatarFallback>{(residentUser.fullName?.[0] || residentUser.username?.[0] || 'U').toUpperCase()}</AvatarFallback>
                     </Avatar>
-                    <span className="text-sm truncate hidden xs:block">{residentUser.fullName}</span>
+                    <span className="text-sm">{residentUser.fullName}</span>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem onClick={handleResidentLogout}>
@@ -455,14 +454,14 @@ export default function UgnayanApp(): React.JSX.Element {
               ) : (
                 <Button
                   variant="outline"
-                  size="sm"
                   onClick={() => setResidentLoginOpen(true)}
-                  className="border-white text-white hover:bg-green-700 text-xs md:text-sm h-8 md:h-10"
+                  className="border-white text-white hover:bg-green-700"
                 >
-                  <LogIn className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" />
-                  Login
+                  <LogIn className="h-4 w-4 mr-2" />
+                  Resident Login
                 </Button>
               )}
+              {/* Official Login button removed */}
             </div>
           </div>
         </div>
@@ -499,34 +498,32 @@ export default function UgnayanApp(): React.JSX.Element {
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           {/* Navigation Tabs */}
-          <div className="overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0">
-            <TabsList className="flex sm:grid gap-2 bg-white p-2 shadow-md h-auto grid-cols-3 md:grid-cols-6 lg:grid-cols-7 min-w-max sm:min-w-0">
-              <TabsTrigger value="home" className="flex flex-col items-center gap-1 py-3 px-4 sm:px-2">
-                <Home className="h-5 w-5" />
-                <span className="text-[10px] sm:text-xs">Home</span>
-              </TabsTrigger>
-              <TabsTrigger value="services" className="flex flex-col items-center gap-1 py-3 px-4 sm:px-2">
-                <FileText className="h-5 w-5" />
-                <span className="text-[10px] sm:text-xs">Services</span>
-              </TabsTrigger>
-              <TabsTrigger value="map" className="flex flex-col items-center gap-1 py-3 px-4 sm:px-2">
-                <Map className="h-5 w-5" />
-                <span className="text-[10px] sm:text-xs">Map</span>
-              </TabsTrigger>
-              <TabsTrigger value="announcements" className="flex flex-col items-center gap-1 py-3 px-4 sm:px-2">
-                <Bell className="h-5 w-5" />
-                <span className="text-[10px] sm:text-xs">News</span>
-              </TabsTrigger>
-              <TabsTrigger value="feedback" className="flex flex-col items-center gap-1 py-3 px-4 sm:px-2">
-                <MessageSquare className="h-5 w-5" />
-                <span className="text-[10px] sm:text-xs">Feedback</span>
-              </TabsTrigger>
-              <TabsTrigger value="emergency" className="flex flex-col items-center gap-1 py-3 px-4 sm:px-2">
-                <Phone className="h-5 w-5" />
-                <span className="text-[10px] sm:text-xs">Emergency</span>
-              </TabsTrigger>
-            </TabsList>
-          </div>
+          <TabsList className="grid gap-2 bg-white p-2 shadow-md h-auto grid-cols-4 lg:grid-cols-7">
+            <TabsTrigger value="home" className="flex flex-col items-center gap-1 py-3">
+              <Home className="h-5 w-5" />
+              <span className="text-xs">Home</span>
+            </TabsTrigger>
+            <TabsTrigger value="services" className="flex flex-col items-center gap-1 py-3">
+              <FileText className="h-5 w-5" />
+              <span className="text-xs">Services</span>
+            </TabsTrigger>
+            <TabsTrigger value="map" className="flex flex-col items-center gap-1 py-3">
+              <Map className="h-5 w-5" />
+              <span className="text-xs">Map</span>
+            </TabsTrigger>
+            <TabsTrigger value="announcements" className="flex flex-col items-center gap-1 py-3">
+              <Bell className="h-5 w-5" />
+              <span className="text-xs">News</span>
+            </TabsTrigger>
+            <TabsTrigger value="feedback" className="flex flex-col items-center gap-1 py-3">
+              <MessageSquare className="h-5 w-5" />
+              <span className="text-xs">Feedback</span>
+            </TabsTrigger>
+            <TabsTrigger value="emergency" className="flex flex-col items-center gap-1 py-3">
+              <Phone className="h-5 w-5" />
+              <span className="text-xs">Emergency</span>
+            </TabsTrigger>
+          </TabsList>
 
           {/* Home Tab */}
           <TabsContent value="home" className="space-y-6">
@@ -716,42 +713,40 @@ export default function UgnayanApp(): React.JSX.Element {
           {/* Service Requests Tab */}
           <TabsContent value="services" className="space-y-6">
             <div className="flex flex-col items-center justify-center mb-6">
-              <h2 className="text-xl md:text-2xl font-bold text-gray-800 mb-4 text-center">Select Service Type</h2>
-              <div className="overflow-x-auto w-full flex justify-center pb-2">
-                <div className="inline-flex p-1 bg-gray-100 rounded-lg border border-gray-200 min-w-max sm:min-w-0">
-                  <Button 
-                    variant={serviceSubTab === 'documents' ? 'default' : 'ghost'}
-                    onClick={() => setServiceSubTab('documents')}
-                    className={`${serviceSubTab === 'documents' ? 'bg-blue-600' : ''} text-xs md:text-sm px-2 md:px-4`}
-                  >
-                    <FileText className="mr-1 md:mr-2 h-3 w-3 md:h-4 md:w-4" />
-                    Documents
-                  </Button>
-                  <Button 
-                    variant={serviceSubTab === 'blotter' ? 'default' : 'ghost'}
-                    onClick={() => setServiceSubTab('blotter')}
-                    className={`${serviceSubTab === 'blotter' ? 'bg-red-700' : ''} text-xs md:text-sm px-2 md:px-4`}
-                  >
-                    <Shield className="mr-1 md:mr-2 h-3 w-3 md:h-4 md:w-4" />
-                    Blotter
-                  </Button>
-                  <Button 
-                    variant={serviceSubTab === 'report' ? 'default' : 'ghost'}
-                    onClick={() => setServiceSubTab('report')}
-                    className={`${serviceSubTab === 'report' ? 'bg-orange-600' : ''} text-xs md:text-sm px-2 md:px-4`}
-                  >
-                    <AlertTriangle className="mr-1 md:mr-2 h-3 w-3 md:h-4 md:w-4" />
-                    Report
-                  </Button>
-                  <Button 
-                    variant={serviceSubTab === 'myrequests' ? 'default' : 'ghost'}
-                    onClick={() => setServiceSubTab('myrequests')}
-                    className={`${serviceSubTab === 'myrequests' ? 'bg-indigo-600' : ''} text-xs md:text-sm px-2 md:px-4`}
-                  >
-                    <Search className="mr-1 md:mr-2 h-3 w-3 md:h-4 md:w-4" />
-                    History
-                  </Button>
-                </div>
+              <h2 className="text-2xl font-bold text-gray-800 mb-4">Select Service Type</h2>
+              <div className="inline-flex p-1 bg-gray-100 rounded-lg border border-gray-200">
+                <Button 
+                  variant={serviceSubTab === 'documents' ? 'default' : 'ghost'}
+                  onClick={() => setServiceSubTab('documents')}
+                  className={serviceSubTab === 'documents' ? 'bg-blue-600' : ''}
+                >
+                  <FileText className="mr-2 h-4 w-4" />
+                  Document Requests
+                </Button>
+                <Button 
+                  variant={serviceSubTab === 'blotter' ? 'default' : 'ghost'}
+                  onClick={() => setServiceSubTab('blotter')}
+                  className={serviceSubTab === 'blotter' ? 'bg-red-700' : ''}
+                >
+                  <Shield className="mr-2 h-4 w-4" />
+                  Report Form
+                </Button>
+                <Button 
+                  variant={serviceSubTab === 'report' ? 'default' : 'ghost'}
+                  onClick={() => setServiceSubTab('report')}
+                  className={serviceSubTab === 'report' ? 'bg-orange-600' : ''}
+                >
+                  <AlertTriangle className="mr-2 h-4 w-4" />
+                  Report Issues
+                </Button>
+                <Button 
+                  variant={serviceSubTab === 'myrequests' ? 'default' : 'ghost'}
+                  onClick={() => setServiceSubTab('myrequests')}
+                  className={serviceSubTab === 'myrequests' ? 'bg-indigo-600' : ''}
+                >
+                  <Search className="mr-2 h-4 w-4" />
+                  My Requests
+                </Button>
               </div>
             </div>
 

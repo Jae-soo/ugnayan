@@ -83,14 +83,4 @@ export interface Reply {
   attachments?: Array<{ name: string; size: number; type: string; dataUrl: string }>;
 }
 
-export interface UserProfile {
-  id: string;
-  username: string;
-  fullName: string;
-  email: string;
-  phone: string;
-  address: string;
-  role?: string;
-}
-
 export type SubmissionType = 'complaint' | 'document';

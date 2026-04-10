@@ -1009,34 +1009,32 @@ const handleViewReplies = async (referenceId: string): Promise<void> => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 via-blue-50 to-green-50">
       {/* Header */}
-      <header className="bg-gradient-to-r from-green-600 to-green-700 text-white shadow-lg sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4 md:py-6">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+      <header className="bg-gradient-to-r from-green-600 to-green-700 text-white shadow-lg">
+        <div className="container mx-auto px-4 py-6">
+          <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <div className="bg-white p-1.5 md:p-2 rounded-full">
-                <Shield className="h-6 w-6 md:h-8 md:w-8 text-green-600" />
+              <div className="bg-white p-2 rounded-full">
+                <Shield className="h-8 w-8 text-green-600" />
               </div>
               <div>
-                <h1 className="text-xl md:text-3xl font-bold">Ugnayan Admin</h1>
-                <p className="text-green-100 text-[10px] md:text-sm">Barangay Irisan Management Portal</p>
+                <h1 className="text-3xl font-bold">Ugnayan Admin</h1>
+                <p className="text-green-100 text-sm">Barangay Irisan Management Portal</p>
               </div>
             </div>
-            <div className="flex items-center gap-2 md:gap-3 w-full sm:w-auto justify-center sm:justify-end">
-              <div className="hidden md:block">
-                <RealTimeClock />
-              </div>
-              <div className="text-right mr-2 md:mr-4">
-                <p className="text-xs md:text-sm font-medium truncate max-w-[120px] md:max-w-none">{officialInfo.name}</p>
-                <p className="text-[10px] md:text-xs text-green-100">{officialInfo.role}</p>
+            <div className="flex items-center gap-3">
+              <RealTimeClock />
+              <div className="text-right mr-4">
+                <p className="text-sm font-medium">{officialInfo.name}</p>
+                <p className="text-xs text-green-100">{officialInfo.role}</p>
               </div>
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={onLogout}
-                className="text-white hover:bg-green-800 h-8 w-8 md:h-10 md:w-10"
+                className="text-white hover:bg-green-800"
                 title="Logout"
               >
-                <LogOut className="h-4 w-4 md:h-5 md:w-5" />
+                <LogOut className="h-5 w-5" />
               </Button>
             </div>
           </div>
@@ -1209,15 +1207,15 @@ const handleViewReplies = async (referenceId: string): Promise<void> => {
             <TabsContent value="service-requests">
               <Card>
                 <CardHeader>
-                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                  <div className="flex items-center justify-between">
                     <div>
                       <CardTitle>Service Requests</CardTitle>
                       <CardDescription>Manage document service requests from residents</CardDescription>
                     </div>
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex items-center gap-2">
                       <Select value={sortConfig.key} onValueChange={(val) => setSortConfig({ ...sortConfig, key: val })}>
-                        <SelectTrigger className="w-[110px] md:w-[130px]">
-                          <SelectValue placeholder="Sort" />
+                        <SelectTrigger className="w-[130px]">
+                          <SelectValue placeholder="Sort by" />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="date">Date</SelectItem>
@@ -1230,19 +1228,16 @@ const handleViewReplies = async (referenceId: string): Promise<void> => {
                         size="icon"
                         onClick={() => setSortConfig({ ...sortConfig, direction: sortConfig.direction === 'asc' ? 'desc' : 'asc' })}
                         title={sortConfig.direction === 'asc' ? "Ascending" : "Descending"}
-                        className="h-9 w-9 md:h-10 md:w-10"
                       >
                         {sortConfig.direction === 'asc' ? "↑" : "↓"}
                       </Button>
-                      <div className="relative flex-1 min-w-[150px] md:min-w-[200px]">
-                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
-                        <Input
-                          placeholder="Search..."
-                          value={searchQuery}
-                          onChange={(e) => setSearchQuery(e.target.value)}
-                          className="pl-9 w-full"
-                        />
-                      </div>
+                      <Search className="h-4 w-4 text-gray-400" />
+                      <Input
+                        placeholder="Search..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-64"
+                      />
                     </div>
                   </div>
                 </CardHeader>
@@ -1343,15 +1338,15 @@ const handleViewReplies = async (referenceId: string): Promise<void> => {
             <TabsContent value="reports">
               <Card>
                 <CardHeader>
-                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                  <div className="flex items-center justify-between">
                     <div>
                       <CardTitle>Reports</CardTitle>
                       <CardDescription>Review and respond to community reports</CardDescription>
                     </div>
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex items-center gap-2">
                       <Select value={sortConfig.key} onValueChange={(val) => setSortConfig({ ...sortConfig, key: val })}>
-                        <SelectTrigger className="w-[110px] md:w-[130px]">
-                          <SelectValue placeholder="Sort" />
+                        <SelectTrigger className="w-[130px]">
+                          <SelectValue placeholder="Sort by" />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="date">Date</SelectItem>
@@ -1364,19 +1359,16 @@ const handleViewReplies = async (referenceId: string): Promise<void> => {
                         size="icon"
                         onClick={() => setSortConfig({ ...sortConfig, direction: sortConfig.direction === 'asc' ? 'desc' : 'asc' })}
                         title={sortConfig.direction === 'asc' ? "Ascending" : "Descending"}
-                        className="h-9 w-9 md:h-10 md:w-10"
                       >
                         {sortConfig.direction === 'asc' ? "↑" : "↓"}
                       </Button>
-                      <div className="relative flex-1 min-w-[150px] md:min-w-[200px]">
-                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
-                        <Input
-                          placeholder="Search..."
-                          value={searchQuery}
-                          onChange={(e) => setSearchQuery(e.target.value)}
-                          className="pl-9 w-full"
-                        />
-                      </div>
+                      <Search className="h-4 w-4 text-gray-400" />
+                      <Input
+                        placeholder="Search..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-64"
+                      />
                     </div>
                   </div>
                 </CardHeader>

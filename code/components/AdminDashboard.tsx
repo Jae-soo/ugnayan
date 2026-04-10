@@ -361,28 +361,27 @@ export default function AdminDashboard({ officialInfo }: AdminDashboardProps): R
   return (
     <div className="space-y-6">
       {/* Welcome Header */}
-      <Card className="bg-gradient-to-r from-green-600 to-green-700 text-white border-none shadow-md overflow-hidden">
-        <CardHeader className="p-4 md:p-6">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="text-center sm:text-left">
-              <CardTitle className="text-xl md:text-3xl flex items-center justify-center sm:justify-start gap-2">
-                <Activity className="h-6 w-6 md:h-8 md:w-8" />
+      <Card className="bg-gradient-to-r from-green-600 to-green-700 text-white border-none">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-3xl flex items-center gap-2">
+                <Activity className="h-8 w-8" />
                 Welcome, {officialInfo.name}
               </CardTitle>
-              <CardDescription className="text-green-100 text-sm md:text-lg mt-1 md:mt-2">
+              <CardDescription className="text-green-100 text-lg mt-2">
                 {officialInfo.role} - Administrative Dashboard
               </CardDescription>
             </div>
             <Button
               variant="secondary"
-              size="sm"
               onClick={() => {
                 loadData()
                 loadUsers()
                 loadAnnouncements()
                 toast.success('Dashboard refreshed!')
               }}
-              className="bg-white text-green-700 hover:bg-green-50 w-full sm:w-auto"
+              className="bg-white text-green-700 hover:bg-green-50"
             >
               <RefreshCw className="h-4 w-4 mr-2" />
               Refresh
@@ -392,7 +391,7 @@ export default function AdminDashboard({ officialInfo }: AdminDashboardProps): R
       </Card>
 
       {/* Statistics Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="border-l-4 border-l-blue-500">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Total Requests</CardTitle>
