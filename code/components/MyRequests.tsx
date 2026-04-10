@@ -201,9 +201,9 @@ export default function MyRequests({ residentUser, onBack }: { residentUser?: an
 
           // Merge local reports
           const localReps = await Promise.all(getUserReports(identifier).map(async (r) => {
-            let replies = getRepliesForReference(r.id)
+            let replies = getRepliesForReference(r.referenceId)
             try {
-              const replyRes = await fetch(`/api/replies?referenceId=${r.id}`)
+              const replyRes = await fetch(`/api/replies?referenceId=${r.referenceId}`)
               const replyJson = await replyRes.json()
               if (replyJson.success && replyJson.replies) {
                 replies = replyJson.replies
@@ -211,14 +211,14 @@ export default function MyRequests({ residentUser, onBack }: { residentUser?: an
             } catch {}
 
             return {
-              id: r.id,
+              id: r.referenceId,
               fullName: r.fullName,
               email: r.email,
               phone: r.phone || '',
               location: r.location || '',
-              reportType: r.reportType,
-              priority: r.priority,
-              description: r.description,
+              reportType: r.reportType || '',
+              priority: r.priority || 'medium',
+              description: r.description || '',
               status: r.status,
               submittedAt: r.submittedAt,
               replies
