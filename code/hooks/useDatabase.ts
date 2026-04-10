@@ -210,6 +210,32 @@ export function useDatabase(): DatabaseState & DatabaseActions {
     setStatusMessage('Logged out successfully')
   }, [])
 
+  const fetchServiceRequests = useCallback(async (userId?: string) => {
+    try {
+      const url = userId ? `/api/service-request?email=${userId}` : '/api/service-request'
+      const response = await fetch(url)
+      const data = await response.json()
+
+      if (data.success) {
+        const items = data.serviceRequests || data.requests || []
+        const reqs = items.filter((r: any) => r.type === 'document')
+        const reps = items.filter((r: any) => r.type !== 'document')
+        setServiceRequests(reqs as unknown as ServiceRequestItem[])
+        setReports(reps as unknown as ReportItem[])
+      } else {
+        const local = getLocalServiceRequests()
+        setServiceRequests(local as unknown as ServiceRequestItem[])
+        const localReps = getLocalReports()
+        setReports(localReps as unknown as ReportItem[])
+      }
+    } catch (error: unknown) {
+      const local = getLocalServiceRequests()
+      setServiceRequests(local as unknown as ServiceRequestItem[])
+      const localReps = getLocalReports()
+      setReports(localReps as unknown as ReportItem[])
+    }
+  }, [])
+
   const createServiceRequest = useCallback(async (
     fullName: string,
     email: string,
@@ -254,7 +280,7 @@ export function useDatabase(): DatabaseState & DatabaseActions {
       setServiceRequests(local as unknown as ServiceRequestItem[])
       setStatusMessage('Saved locally')
     }
-  }, [userProfile])
+  }, [userProfile, fetchServiceRequests])
 
   const createReport = useCallback(async (
     reportType: string,
@@ -300,32 +326,6 @@ export function useDatabase(): DatabaseState & DatabaseActions {
       setStatusMessage('Failed to submit issue report')
     }
   }, [userProfile, fetchServiceRequests])
-
-  const fetchServiceRequests = useCallback(async (userId?: string) => {
-    try {
-      const url = userId ? `/api/service-request?email=${userId}` : '/api/service-request'
-      const response = await fetch(url)
-      const data = await response.json()
-
-      if (data.success) {
-        const items = data.serviceRequests || data.requests || []
-        const reqs = items.filter((r: any) => r.type === 'document')
-        const reps = items.filter((r: any) => r.type !== 'document')
-        setServiceRequests(reqs as unknown as ServiceRequestItem[])
-        setReports(reps as unknown as ReportItem[])
-      } else {
-        const local = getLocalServiceRequests()
-        setServiceRequests(local as unknown as ServiceRequestItem[])
-        const localReps = getLocalReports()
-        setReports(localReps as unknown as ReportItem[])
-      }
-    } catch (error: unknown) {
-      const local = getLocalServiceRequests()
-      setServiceRequests(local as unknown as ServiceRequestItem[])
-      const localReps = getLocalReports()
-      setReports(localReps as unknown as ReportItem[])
-    }
-  }, [])
 
   const fetchReports = useCallback(async (userId?: string) => {
     // Already handled in fetchServiceRequests
