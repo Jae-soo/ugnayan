@@ -54,7 +54,8 @@ import {
   Brain,
   Zap,
   TrendingDown,
-  ArrowRight
+  ArrowRight,
+  CloudRain
 } from 'lucide-react'
 import { PieChart, Pie, Cell, BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer } from 'recharts'
 import type { ServiceRequest, Report, Reply } from '@/lib/types'
