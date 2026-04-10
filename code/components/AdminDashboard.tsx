@@ -291,7 +291,7 @@ export default function AdminDashboard({ officialInfo }: AdminDashboardProps): R
     toast.success(`Exported ${type} data successfully!`)
   }
 
-  const getStatusBadge = (status: string): React.JSX.Element => {
+  const getStatusBadge = (status?: string): React.JSX.Element => {
     const variants: Record<string, { variant: 'default' | 'secondary' | 'destructive' | 'outline', color: string }> = {
       'pending': { variant: 'outline', color: 'text-yellow-600 border-yellow-600' },
       'in-progress': { variant: 'default', color: 'text-blue-600 bg-blue-50 border-blue-600' },
@@ -301,11 +301,12 @@ export default function AdminDashboard({ officialInfo }: AdminDashboardProps): R
       'rejected': { variant: 'destructive', color: 'text-red-600' }
     }
 
-    const config = variants[status] || variants['pending']
+    const s = status || 'pending'
+    const config = variants[s] || variants['pending']
     
     return (
       <Badge variant={config.variant} className={config.color}>
-        {status}
+        {s}
       </Badge>
     )
   }
