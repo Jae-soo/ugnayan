@@ -758,7 +758,7 @@ export default function UgnayanApp(): React.JSX.Element {
             {serviceSubTab === 'documents' ? (
               <ServiceRequestForm onBack={() => setActiveTab('home')} residentUser={residentUser} initialCategory="document" />
             ) : serviceSubTab === 'blotter' ? (
-              <BlotterForm onBack={() => setActiveTab('home')} />
+              <BlotterForm onBack={() => setActiveTab('home')} residentUser={residentUser} />
             ) : serviceSubTab === 'report' ? (
               <ServiceRequestForm onBack={() => setActiveTab('home')} residentUser={residentUser} initialCategory="report" />
             ) : (

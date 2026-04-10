@@ -10,10 +10,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { toast } from 'sonner'
 import { saveBlotter } from '@/lib/storage'
-import type { Blotter } from '@/lib/types'
+import type { Blotter, UserProfile } from '@/lib/types'
 import { ShieldAlert, Send, User, MapPin, Calendar, Clock, Info, Upload, X, Image as ImageIcon, ArrowLeft } from 'lucide-react'
 
-export default function BlotterForm({ onBack }: { onBack?: () => void }): React.JSX.Element {
+interface BlotterFormProps {
+  onBack?: () => void
+  residentUser?: UserProfile | null
+}
+
+export default function BlotterForm({ onBack, residentUser }: BlotterFormProps): React.JSX.Element {
   const [idPreview, setIdPreview] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     dateReported: new Date().toISOString().split('T')[0],
@@ -22,11 +27,11 @@ export default function BlotterForm({ onBack }: { onBack?: () => void }): React.
     incidentType: '',
     incidentTypeOther: '',
     
-    complainantName: '',
-    complainantAddress: '',
+    complainantName: residentUser?.fullName || '',
+    complainantAddress: (residentUser as any)?.address || '',
     complainantAge: '',
     complainantSex: 'male',
-    complainantContact: '',
+    complainantContact: residentUser?.phone || '',
     
     respondentName: '',
     respondentAddress: '',
